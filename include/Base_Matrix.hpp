@@ -185,6 +185,9 @@ size_t invers(int I, int J, int K) {
             count++;
         }
     }
+    if ((a[0] > a[1]) || (a[0] < a[1])) {
+        count++;
+    }
     return count;
 }
 template<size_t DimN>
@@ -195,6 +198,9 @@ size_t invers(int I, int J, int K, int L) {
         if(((a[i] > a[i+1]) && (a[i]>a[i-1])) || ((a[i] < a[i+1]) && (a[i] < a[i-1]))) {
             count++;
         }
+    }
+    if ((a[0] > a[1]) || (a[0] < a[1])) {
+        count++;
     }
     return count;
 }
