@@ -88,6 +88,7 @@ namespace _spatial {
     struct Matrix3D : Matrix3D_expr<typename proto::terminal< matrix3_<T>>::type> {
         using expr_type = typename proto::terminal< matrix3_<T>>::type;
         using range_tbb = tbb::blocked_rangeNd<size_t, 3>;
+        using range_tbb4 = tbb::blocked_rangeNd<size_t, 4>;
 
         using array_type = typename matrix3_<T>::array_type;
         using range = boost::multi_array_types::index_range;
@@ -131,13 +132,24 @@ namespace _spatial {
                             for(size_t k = 0; k < size(2); ++k)
                                     proto::value(*this)(i, j, k) = dist(gen);
                 }
-                if constexpr(!std::is_integral_v<T>) {
+                if constexpr(!std::is_integral_v<T> && std::is_same_v<T, double>) {
                     boost::random::uniform_real_distribution<> dist{double(min), double(max)};
                     for(size_t i = 0; i < size(0); ++i)
                         for(size_t j = 0; j < size(1); ++j)
                             for(size_t k = 0; k < size(2); ++k)
                                     proto::value(*this)(i, j, k) = dist(gen);
                 }
+        }
+        template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<double>> &&
+                                                          std::is_same_v<F, double>>>
+        void Random(F min, F max) {
+            std::time_t now = std::time(0);
+            boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
+            boost::random::uniform_real_distribution<> dist{double(min), double(max)};
+            for(size_t i = 0; i < size(0); ++i)
+                for(size_t j = 0; j < size(1); ++j)
+                    for(size_t k = 0; k < size(2); ++k)
+                        proto::value(*this)(i, j, k) = std::complex(dist(gen), dist(gen));
         }
         template< typename Expr >
         Matrix3D<T>& operator = (Expr const& expr) {
@@ -198,6 +210,38 @@ namespace _spatial {
                             for (size_t k = out_k.begin(); k < out_k.end(); ++k)
                                 proto::value(matrix)(i, j, k) = proto::value(*this)(i, j, k) + val;
                 });
+            return matrix;
+        }
+        template< typename Expr >
+        Matrix3D<T> operator * (Expr const& matr1) {
+            BOOST_ASSERT_MSG(size(0) == matr1.size(0) && size(1) == matr1.size(1) && size(2) == matr1.size(2),
+                             "MATRICES SIZE IS NOT EQUAL");
+            SizeMatrix3D_context const sizes(size(0), size(1), size(2));
+            proto::eval(proto::as_expr<Matrix3D_domain>(matr1), sizes);
+            Matrix3D<T> matrix(shape_);
+            for (size_t i = 0; i < size(0); ++i)
+                for (size_t j = 0; j < size(1); ++j)
+                    for (size_t k = 0; k < size(2); ++k) {
+                        proto::value(matrix)(i, j, k) =
+                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(i, j, k),
+                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                         for (size_t l = r.begin(); l != r.end(); ++l) {
+                                             tmp += proto::value(*this)(i, j, l) * matr1(l, j, k);
+                                         } return tmp; }, std::plus<T>());
+                        proto::value(matrix)(i, j, k) =
+                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), proto::value(matrix)(i, j, k),
+                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                         for (size_t l = r.begin(); l != r.end(); ++l) {
+                                             tmp += proto::value(*this)(i, l, k) * matr1(l, j, k);
+                                         } return tmp; }, std::plus<T>());
+                        proto::value(matrix)(i, j, k) =
+                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k),
+                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                         for (size_t l = r.begin(); l != r.end(); ++l) {
+                                             tmp += proto::value(*this)(i, j, l) * matr1(i, l, k);
+                                         } return tmp; }, std::plus<T>());
+                    }
+
             return matrix;
         }
         Matrix3D<T> operator * (const T val) const {

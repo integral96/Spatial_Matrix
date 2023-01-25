@@ -36,9 +36,11 @@ namespace _spatial {
         constexpr void is_Matrix() {}
 
         inline T& operator () (size_t i) {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size");
             return (*this)[i];
         }
         inline T const& operator () (size_t i) const {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size");
             return (*this)[i];
         }
     };
@@ -58,9 +60,13 @@ namespace _spatial {
         constexpr void is_Matrix() {}
 
         inline T& operator () (size_t i, size_t j) {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size N");
+            BOOST_ASSERT_MSG((j < this->shape()[1]), "Error j >= size M");
             return (*this)[i][j];
         }
         inline T const& operator () (size_t i, size_t j) const {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size N");
+            BOOST_ASSERT_MSG((j < this->shape()[1]), "Error j >= size M");
             return (*this)[i][j];
         }
     };
@@ -81,9 +87,15 @@ namespace _spatial {
         constexpr void is_Matrix() {}
 
         inline T& operator () (size_t i, size_t j, size_t k) {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size N");
+            BOOST_ASSERT_MSG((j < this->shape()[1]), "Error j >= size M");
+            BOOST_ASSERT_MSG((k < this->shape()[2]), "Error k >= size K");
             return (*this)[i][j][k];
         }
         inline T const& operator () (size_t i, size_t j, size_t k) const {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size N");
+            BOOST_ASSERT_MSG((j < this->shape()[1]), "Error j >= size M");
+            BOOST_ASSERT_MSG((k < this->shape()[2]), "Error k >= size K");
             return (*this)[i][j][k];
         }
     };
@@ -106,9 +118,17 @@ namespace _spatial {
         constexpr void is_Matrix() {}
 
         inline T& operator () (size_t i, size_t j, size_t k, size_t l) {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size N");
+            BOOST_ASSERT_MSG((j < this->shape()[1]), "Error j >= size M");
+            BOOST_ASSERT_MSG((k < this->shape()[2]), "Error k >= size K");
+            BOOST_ASSERT_MSG((k < this->shape()[3]), "Error k >= size L");
             return (*this)[i][j][k][l];
         }
         inline T const& operator () (size_t i, size_t j, size_t k, size_t l) const {
+            BOOST_ASSERT_MSG((i < this->shape()[0]), "Error i >= size N");
+            BOOST_ASSERT_MSG((j < this->shape()[1]), "Error j >= size M");
+            BOOST_ASSERT_MSG((k < this->shape()[2]), "Error k >= size K");
+            BOOST_ASSERT_MSG((k < this->shape()[3]), "Error k >= size L");
             return (*this)[i][j][k][l];
         }
     };
@@ -156,7 +176,11 @@ struct IsBigInt<big::int128_t> : mpl::true_ {};
 
 ///ABS
 namespace _my {
-template<typename T>
+template<typename T, typename = std::enable_if_t<std::is_same<T, std::complex<double>>::value>>
+inline double abs(const T& x) {
+    return std::norm(x);
+}
+template<typename T, typename = std::enable_if_t<!std::is_same<T, std::complex<double>>::value>>
 inline T abs(const T& x) {
     return (x < 0) ? -x : x;
 }

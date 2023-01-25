@@ -117,7 +117,7 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                             for(size_t l = 0; l < size(3); ++l)
                                 proto::value(*this)(i, j, k, l) = dist(gen);
             }
-            else {
+            if constexpr(!std::is_integral_v<T> && std::is_same_v<T, double>) {
                 boost::random::uniform_real_distribution<> dist{double(min), double(max)};
                 for(size_t i = 0; i < size(0); ++i)
                     for(size_t j = 0; j < size(1); ++j)
@@ -126,21 +126,33 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                                 proto::value(*this)(i, j, k, l) = dist(gen);
             }
     }
+    template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<double>> &&
+                                                      std::is_same_v<F, double>>>
+    void Random(F min, F max) {
+        std::time_t now = std::time(0);
+        boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
+        boost::random::uniform_real_distribution<> dist{double(min), double(max)};
+        for(size_t i = 0; i < size(0); ++i)
+            for(size_t j = 0; j < size(1); ++j)
+                for(size_t k = 0; k < size(2); ++k)
+                    for(size_t l = 0; l < size(3); ++l)
+                    proto::value(*this)(i, j, k, l) = std::complex(dist(gen), dist(gen));
+    }
     template< typename Expr >
     Matrix4D<T> &operator = (Expr const & expr) {
         SizeMatrix4D_context const sizes(size(0), size(1), size(2), size(3));
         proto::eval(proto::as_expr<Matrix4D_domain>(expr), sizes);
         tbb::parallel_for(range_tbb({0, size(0)}, {0, size(1)}, {0, size(2)}, {0, size(3)}),
         [&](const range_tbb& out){
-                const auto& out_i = out.dim(0);
-        const auto& out_j = out.dim(1);
-        const auto& out_k = out.dim(2);
-        const auto& out_l = out.dim(3);
-        for(size_t i = out_i.begin(); i < out_i.end(); ++i)
-            for(size_t j = out_j.begin(); j < out_j.end(); ++j)
-                for(size_t k = out_k.begin(); k < out_k.end(); ++k)
-                    for(size_t l = out_l.begin(); l < out_l.end(); ++l)
-                        proto::value(*this)(i, j, k, l) = expr(i, j, k, l);
+            const auto& out_i = out.dim(0);
+            const auto& out_j = out.dim(1);
+            const auto& out_k = out.dim(2);
+            const auto& out_l = out.dim(3);
+            for(size_t i = out_i.begin(); i < out_i.end(); ++i)
+                for(size_t j = out_j.begin(); j < out_j.end(); ++j)
+                    for(size_t k = out_k.begin(); k < out_k.end(); ++k)
+                        for(size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            proto::value(*this)(i, j, k, l) = expr(i, j, k, l);
         });
         return *this;
     }
@@ -150,31 +162,82 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
         proto::eval(proto::as_expr<Matrix4D_domain>(expr), sizes);
         tbb::parallel_for(range_tbb({0, size(0)}, {0, size(1)}, {0, size(2)}, {0, size(3)}),
         [&](const range_tbb& out){
-                const auto& out_i = out.dim(0);
-        const auto& out_j = out.dim(1);
-        const auto& out_k = out.dim(2);
-        const auto& out_l = out.dim(3);
-        for(size_t i = out_i.begin(); i < out_i.end(); ++i)
-            for(size_t j = out_j.begin(); j < out_j.end(); ++j)
-                for(size_t k = out_k.begin(); k < out_k.end(); ++k)
-                    for(size_t l = out_l.begin(); l < out_l.end(); ++l)
-                        proto::value(*this)(i, j, k, l) += expr(i, j, k, l);
+            const auto& out_i = out.dim(0);
+            const auto& out_j = out.dim(1);
+            const auto& out_k = out.dim(2);
+            const auto& out_l = out.dim(3);
+            for(size_t i = out_i.begin(); i < out_i.end(); ++i)
+                for(size_t j = out_j.begin(); j < out_j.end(); ++j)
+                    for(size_t k = out_k.begin(); k < out_k.end(); ++k)
+                        for(size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            proto::value(*this)(i, j, k, l) += expr(i, j, k, l);
         });
         return *this;
+    }
+    template< typename Expr >
+    Matrix4D<T> operator * (Expr const& matr1) {
+        BOOST_ASSERT_MSG(size(0) == matr1.size(0) && size(1) == matr1.size(1) && size(2) == matr1.size(2) && size(3) == matr1.size(3),
+                         "MATRICES SIZE IS NOT EQUAL");
+        SizeMatrix4D_context const sizes(size(0), size(1), size(2), size(3));
+        proto::eval(proto::as_expr<Matrix4D_domain>(matr1), sizes);
+        Matrix4D<T> matrix(shape_);
+        for (size_t i = 0; i < size(0); ++i)
+            for (size_t j = 0; j < size(1); ++j)
+                for (size_t k = 0; k < size(2); ++k)
+                for (size_t l = 0; l < size(3); ++l) {
+                    proto::value(matrix)(i, j, k, l) =
+                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(3)), proto::value(matrix)(i, j, k, l),
+                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                     for (size_t z = r.begin(); z != r.end(); ++z) {
+                                         tmp += proto::value(*this)(i, j, k, z) * matr1(z, j, k, l);
+                                     } return tmp; }, std::plus<T>());
+                    proto::value(matrix)(i, j, k, l) =
+                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), proto::value(matrix)(i, j, k, l),
+                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                     for (size_t z = r.begin(); z != r.end(); ++z) {
+                                         tmp += proto::value(*this)(i, j, z, l) * matr1(z, j, k, l);
+                                     } return tmp; }, std::plus<T>());
+                    proto::value(matrix)(i, j, k, l) =
+                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k, l),
+                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                     for (size_t z = r.begin(); z != r.end(); ++z) {
+                                         tmp += proto::value(*this)(i, z, k, l) * matr1(z, j, k, l);
+                                     } return tmp; }, std::plus<T>());
+                    proto::value(matrix)(i, j, k, l) =
+                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k, l),
+                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                     for (size_t z = r.begin(); z != r.end(); ++z) {
+                                         tmp += proto::value(*this)(i, j, k, z) * matr1(i, z, k, l);
+                                     } return tmp; }, std::plus<T>());
+                    proto::value(matrix)(i, j, k, l) =
+                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k, l),
+                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                     for (size_t z = r.begin(); z != r.end(); ++z) {
+                                         tmp += proto::value(*this)(i, j, z, l) * matr1(i, z, k, l);
+                                     } return tmp; }, std::plus<T>());
+                    proto::value(matrix)(i, j, k, l) =
+                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k, l),
+                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                     for (size_t z = r.begin(); z != r.end(); ++z) {
+                                         tmp += proto::value(*this)(i, j, k, z) * matr1(i, j, z, l);
+                                     } return tmp; }, std::plus<T>());
+                }
+
+        return matrix;
     }
     Matrix4D<T> operator + (const T val) const {
         Matrix4D<T> matrix(shape_);
         tbb::parallel_for(range_tbb({0, size(0)}, {0, size(1)}, {0, size(2)}, {0, size(3)}),
         [&](const range_tbb& out){
-        const auto& out_i = out.dim(0);
-        const auto& out_j = out.dim(1);
-        const auto& out_k = out.dim(2);
-        const auto& out_l = out.dim(3);
-        for(size_t i = out_i.begin(); i < out_i.end(); ++i)
-            for(size_t j = out_j.begin(); j < out_j.end(); ++j)
-                for(size_t k = out_k.begin(); k < out_k.end(); ++k)
-                    for(size_t l = out_l.begin(); l < out_l.end(); ++l)
-                        proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) + val;
+            const auto& out_i = out.dim(0);
+            const auto& out_j = out.dim(1);
+            const auto& out_k = out.dim(2);
+            const auto& out_l = out.dim(3);
+            for(size_t i = out_i.begin(); i < out_i.end(); ++i)
+                for(size_t j = out_j.begin(); j < out_j.end(); ++j)
+                    for(size_t k = out_k.begin(); k < out_k.end(); ++k)
+                        for(size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) + val;
         });
         return matrix;
     }
@@ -182,15 +245,15 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
         Matrix4D<T> matrix(shape_);
         tbb::parallel_for(range_tbb({0, size(0)}, {0, size(1)}, {0, size(2)}, {0, size(3)}),
         [&](const range_tbb& out){
-                const auto& out_i = out.dim(0);
-        const auto& out_j = out.dim(1);
-        const auto& out_k = out.dim(2);
-        const auto& out_l = out.dim(3);
-        for(size_t i = out_i.begin(); i < out_i.end(); ++i)
-            for(size_t j = out_j.begin(); j < out_j.end(); ++j)
-                for(size_t k = out_k.begin(); k < out_k.end(); ++k)
-                    for(size_t l = out_l.begin(); l < out_l.end(); ++l)
-                        proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) * val;
+            const auto& out_i = out.dim(0);
+            const auto& out_j = out.dim(1);
+            const auto& out_k = out.dim(2);
+            const auto& out_l = out.dim(3);
+            for(size_t i = out_i.begin(); i < out_i.end(); ++i)
+                for(size_t j = out_j.begin(); j < out_j.end(); ++j)
+                    for(size_t k = out_k.begin(); k < out_k.end(); ++k)
+                        for(size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) * val;
         });
         return matrix;
     }
@@ -198,15 +261,15 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
         Matrix4D<T> matrix(shape_);
         tbb::parallel_for(range_tbb({0, size(0)}, {0, size(1)}, {0, size(2)}, {0, size(3)}),
         [&](const range_tbb& out){
-                const auto& out_i = out.dim(0);
-        const auto& out_j = out.dim(1);
-        const auto& out_k = out.dim(2);
-        const auto& out_l = out.dim(3);
-        for(size_t i = out_i.begin(); i < out_i.end(); ++i)
-            for(size_t j = out_j.begin(); j < out_j.end(); ++j)
-                for(size_t k = out_k.begin(); k < out_k.end(); ++k)
-                    for(size_t l = out_l.begin(); l < out_l.end(); ++l)
-                        proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) / val;
+            const auto& out_i = out.dim(0);
+            const auto& out_j = out.dim(1);
+            const auto& out_k = out.dim(2);
+            const auto& out_l = out.dim(3);
+            for(size_t i = out_i.begin(); i < out_i.end(); ++i)
+                for(size_t j = out_j.begin(); j < out_j.end(); ++j)
+                    for(size_t k = out_k.begin(); k < out_k.end(); ++k)
+                        for(size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) / val;
         });
         return matrix;
     }

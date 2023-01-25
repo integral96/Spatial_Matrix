@@ -111,13 +111,23 @@ namespace _spatial {
                     for(size_t i = 0; i < size(0); ++i)
                         for(size_t j = 0; j < size(1); ++j)
                                     proto::value(*this)(i, j) = dist(gen);
-                }
-                if constexpr(!std::is_integral_v<T>) {
+                } else
+                if constexpr(!std::is_integral_v<T> && std::is_same_v<T, double>) {
                     boost::random::uniform_real_distribution<> dist{double(min), double(max)};
                     for(size_t i = 0; i < size(0); ++i)
                         for(size_t j = 0; j < size(1); ++j)
                                     proto::value(*this)(i, j) = dist(gen);
                 }
+        }
+        template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<double>> &&
+                                                          std::is_same_v<F, double>>>
+        void Random(F min, F max) {
+            std::time_t now = std::time(0);
+            boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
+            boost::random::uniform_real_distribution<> dist{double(min), double(max)};
+            for(size_t i = 0; i < size(0); ++i)
+                for(size_t j = 0; j < size(1); ++j)
+                    proto::value(*this)(i, j) = std::complex(dist(gen), dist(gen));
         }
         template< typename Expr >
         Matrix2D<T>& operator = (Expr const& expr) {
@@ -166,16 +176,14 @@ namespace _spatial {
             SizeMatrix2D_context const sizes(size(0), size(1));
             proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
             Matrix2D<T> matrix(shape_);
-            tbb::parallel_for(range3_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(1) }),
-                [&](const range3_tbb& out) {
-                    const auto& out_i = out.dim(0);
-                    const auto& out_j = out.dim(1);
-                    const auto& out_k = out.dim(2);
-                    for (size_t i = out_i.begin(); i < out_i.end(); ++i)
-                        for (size_t j = out_j.begin(); j < out_j.end(); ++j)
-                            for (size_t k = out_k.begin(); k < out_k.end(); ++k)
-                                proto::value(matrix)(i, j) += proto::value(*this)(i, k) * matr1(k, j);
-                });
+            for (size_t i = 0; i < size(0); ++i)
+                for (size_t j = 0; j < size(1); ++j)
+                    proto::value(matrix)(i, j) =
+                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j),
+                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                     for (size_t k = r.begin(); k != r.end(); ++k) {
+                                         tmp += proto::value(*this)(i, k) * matr1(k, j);
+                                     } return tmp; }, std::plus<T>());
             return matrix;
         }
 
@@ -229,7 +237,7 @@ namespace _spatial {
                                 k = j;
                                 //proto::value(*this)(k, i) = proto::value(*this)(j, i);
                             }
-                        if (_my::abs(proto::value(*this)(k, i)) < T(1E-9)) {
+                        if (_my::abs(proto::value(*this)(k, i)) < _my::abs(1E-9)) {
                             tmp = T(0);
                         }
                         if (k != i) {
@@ -242,7 +250,7 @@ namespace _spatial {
                                 proto::value(*this)(i, j) /= proto::value(*this)(i, i);
                         }
                         for (size_t j = 0; j < size(0); ++j) {
-                            if (j != i && _my::abs(proto::value(*this)(j, i)) > T(1E-9)) {
+                            if (j != i && _my::abs(proto::value(*this)(j, i)) > _my::abs(1E-9)) {
                                 for (size_t l = i + 1; l < size(0); ++l)
                                     proto::value(*this)(j, l) -= proto::value(*this)(i, l) * proto::value(*this)(j, i);
                             }
