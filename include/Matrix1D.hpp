@@ -85,7 +85,7 @@ namespace _spatial {
         using sub_matrix_view1D = typename matrix1_<T>::sub_matrix_view1D;
 
         const std::array<size_t, 1>& shape_;
-
+        static constexpr size_t dim = 1;
         constexpr Matrix1D(const std::array<size_t, 1>& shape) :
             Matrix1D_expr<expr_type>(expr_type::make(matrix1_<T>(shape))), shape_(shape) {
 

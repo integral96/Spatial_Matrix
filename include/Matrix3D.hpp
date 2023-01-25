@@ -2,6 +2,8 @@
 #include "../include/Matrix2D.hpp"
 
 namespace _spatial {
+    template<typename T>
+    struct Matrix4D;
 
     template<typename Expr>
     struct Matrix3D_expr;
@@ -18,7 +20,7 @@ namespace _spatial {
         proto::not_equal_to< Matrix3DGrammar, Matrix3DGrammar>,
         proto::equal_to< Matrix3DGrammar, Matrix3DGrammar>
     > {};
-    struct Matrix3D_domain : proto::domain<proto::generator<Matrix3D_expr>, Matrix3DGrammar> {};
+    struct Matrix3D_domain : proto::domain<proto::generator<Matrix3D_expr>, Matrix3DGrammar>{};
 
     struct Matrix3D_context : proto::callable_context< Matrix3D_context const > {
         Matrix3D_context(size_t i, size_t j, size_t k) : i(i), j(j), k(k) {}
@@ -96,7 +98,7 @@ namespace _spatial {
         using sub_matrix_view3D = typename matrix3_<T>::sub_matrix_view3D;
 
         const std::array<size_t, 3>& shape_;
-
+        static constexpr size_t dim = 3;
         constexpr Matrix3D(const std::array<size_t, 3>& shape) :
             Matrix3D_expr<expr_type>(expr_type::make(matrix3_<T>(shape))), shape_(shape) {
 
@@ -212,38 +214,126 @@ namespace _spatial {
                 });
             return matrix;
         }
-        template< typename Expr >
-        Matrix3D<T> operator * (Expr const& matr1) {
-            BOOST_ASSERT_MSG(size(0) == matr1.size(0) && size(1) == matr1.size(1) && size(2) == matr1.size(2),
-                             "MATRICES SIZE IS NOT EQUAL");
+        template<char Index, typename F, typename =
+                 std::enable_if_t<std::is_same_v<T, F> && (Index == 'i' || Index == 'j' || Index == 'k')> >
+        Matrix3D<T> product(Matrix2D<F> const& matr1) {
+            if constexpr(Index == 'i') {
+                BOOST_ASSERT_MSG(size(0) <= matr1.size(1),
+                                 "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
+                SizeMatrix2D_context const sizes(size(0), size(0));
+                proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
+                Matrix3D<T> matrix(shape_);
+                for (size_t i = 0; i < size(0); ++i)
+                    for (size_t j = 0; j < size(1); ++j)
+                        for (size_t k = 0; k < size(2); ++k) {
+                            proto::value(matrix)(i, j, k) =
+                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), proto::value(matrix)(i, j, k),
+                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                             for (size_t l = r.begin(); l != r.end(); ++l) {
+                                                 tmp += proto::value(*this)(l, j, k) * proto::value(matr1)(l, i);
+                                             } return tmp; }, std::plus<T>());
+                        }
+                return matrix;
+            }
+            if constexpr(Index == 'j') {
+                BOOST_ASSERT_MSG(size(0) <= matr1.size(1),
+                                 "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == j");
+                SizeMatrix2D_context const sizes(size(1), size(1));
+                proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
+                Matrix3D<T> matrix(shape_);
+                for (size_t i = 0; i < size(0); ++i)
+                    for (size_t j = 0; j < size(1); ++j)
+                        for (size_t k = 0; k < size(2); ++k) {
+                            proto::value(matrix)(i, j, k) =
+                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k),
+                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                             for (size_t l = r.begin(); l != r.end(); ++l) {
+                                                 tmp += proto::value(*this)(i, l, k) * proto::value(matr1)(l, j);
+                                             } return tmp; }, std::plus<T>());
+                        }
+                return matrix;
+            }
+            if constexpr(Index == 'k') {
+                BOOST_ASSERT_MSG(size(2) <= matr1.size(1),
+                                 "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
+                SizeMatrix2D_context const sizes(size(2), size(2));
+                proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
+                Matrix3D<T> matrix(shape_);
+                for (size_t i = 0; i < size(0); ++i)
+                    for (size_t j = 0; j < size(1); ++j)
+                        for (size_t k = 0; k < size(2); ++k) {
+                            proto::value(matrix)(i, j, k) =
+                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(i, j, k),
+                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                             for (size_t l = r.begin(); l != r.end(); ++l) {
+                                                 tmp += proto::value(*this)(i, j, l) * proto::value(matr1)(l, k);
+                                             } return tmp; }, std::plus<T>());
+                        }
+                return matrix;
+            }
+        }
+        template<char Index, typename F, typename =
+                 std::enable_if_t<std::is_same_v<T, F> && (Index == 'i' || Index == 'j' || Index == 'k')> >
+        Matrix4D<T> product(Matrix3D<F> const& matr1) {
+
             SizeMatrix3D_context const sizes(size(0), size(1), size(2));
             proto::eval(proto::as_expr<Matrix3D_domain>(matr1), sizes);
-            Matrix3D<T> matrix(shape_);
-            for (size_t i = 0; i < size(0); ++i)
-                for (size_t j = 0; j < size(1); ++j)
-                    for (size_t k = 0; k < size(2); ++k) {
-                        proto::value(matrix)(i, j, k) =
-                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(i, j, k),
-                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                         for (size_t l = r.begin(); l != r.end(); ++l) {
-                                             tmp += proto::value(*this)(i, j, l) * matr1(l, j, k);
-                                         } return tmp; }, std::plus<T>());
-                        proto::value(matrix)(i, j, k) =
-                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), proto::value(matrix)(i, j, k),
-                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                         for (size_t l = r.begin(); l != r.end(); ++l) {
-                                             tmp += proto::value(*this)(i, l, k) * matr1(l, j, k);
-                                         } return tmp; }, std::plus<T>());
-                        proto::value(matrix)(i, j, k) =
-                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k),
-                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                         for (size_t l = r.begin(); l != r.end(); ++l) {
-                                             tmp += proto::value(*this)(i, j, l) * matr1(i, l, k);
-                                         } return tmp; }, std::plus<T>());
-                    }
-
-            return matrix;
+            if constexpr(Index == 'i') {
+                BOOST_ASSERT_MSG(size(0) <= matr1.size(1),
+                                 "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
+                std::array<size_t, 4> shape4D = { {size(0), size(0), size(1), size(2)} };
+                Matrix4D<T> matrix(shape4D);
+                for (size_t k1 = 0; k1 < size(0); ++k1)
+                    for (size_t k2 = 0; k2 < size(1); ++k2)
+                        for (size_t k3 = 0; k3 < size(2); ++k3)
+                        for (size_t k4 = 0; k4 < size(2); ++k4){
+                            proto::value(matrix)(k1, k2, k3, k4) =
+                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(k1, k2, k3, k4),
+                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                             for (size_t l = r.begin(); l != r.end(); ++l) {
+                                                 tmp += proto::value(*this)(l, k2, k3) * proto::value(matr1)(l, k1, k4);
+                                             } return tmp; }, std::plus<T>());
+                        }
+                return matrix;
+            }
+            if constexpr(Index == 'j') {
+                BOOST_ASSERT_MSG(size(0) <= matr1.size(1) && size(0) == size(1),
+                                 "MATRICES 3D * 3D SIZE IS NOT EQUAL, Index == j");
+                std::array<size_t, 4> shape4D = { {size(0), size(1), size(1), size(2)} };
+                Matrix4D<T> matrix(shape4D);
+                for (size_t k1 = 0; k1 < size(0); ++k1)
+                    for (size_t k2 = 0; k2 < size(1); ++k2)
+                        for (size_t k3 = 0; k3 < size(1); ++k3)
+                        for (size_t k4 = 0; k4 < size(2); ++k4){
+                            proto::value(matrix)(k1, k2, k3, k4) =
+                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(k1, k2, k3, k4),
+                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                             for (size_t l = r.begin(); l != r.end(); ++l) {
+                                                 tmp += proto::value(*this)(k1, l, k3) * proto::value(matr1)(l, k2, k4);
+                                             } return tmp; }, std::plus<T>());
+                        }
+                return matrix;
+            }
+            if constexpr(Index == 'k') {
+                BOOST_ASSERT_MSG(size(0) == matr1.size(0) && size(0) == size(2),
+                                 "MATRICES 3D * 3D SIZE IS NOT EQUAL, Index == i");
+                std::array<size_t, 4> shape4D = { {size(0), size(1), size(2), size(2)} };
+                Matrix4D<T> matrix(shape4D);
+                for (size_t k1 = 0; k1 < size(0); ++k1)
+                    for (size_t k2 = 0; k2 < size(1); ++k2)
+                        for (size_t k3 = 0; k3 < size(2); ++k3)
+                        for (size_t k4 = 0; k4 < size(2); ++k4){
+                            proto::value(matrix)(k1, k2, k3, k4) =
+                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(k1, k2, k3, k4),
+                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                             for (size_t l = r.begin(); l != r.end(); ++l) {
+                                                 tmp += proto::value(*this)(k1, k2, l) * proto::value(matr1)(l, k3, k4);
+                                             } return tmp; }, std::plus<T>());
+                        }
+                return matrix;
+            }
         }
+
         Matrix3D<T> operator * (const T val) const {
             Matrix3D<T> matrix(shape_);
             tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }),

@@ -97,7 +97,7 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
     using sub_matrix_view1D = typename matrix4_<T>::sub_matrix_view1D;
 
     const std::array<size_t, 4>& shape_;
-
+    static constexpr size_t dim = 4;
     constexpr Matrix4D(const std::array<size_t, 4>& shape) :
         Matrix4D_expr<expr_type>(expr_type::make(matrix4_<T>(shape))), shape_(shape) {
 
@@ -173,6 +173,86 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                             proto::value(*this)(i, j, k, l) += expr(i, j, k, l);
         });
         return *this;
+    }
+    template<char Index, typename F, typename =
+             std::enable_if_t<std::is_same_v<T, F> && (Index == 'i' || Index == 'j' || Index == 'k' || Index == 'l')> >
+    Matrix4D<T> product(Matrix3D<F> const& matr1) {
+        if constexpr(Index == 'i') {
+            BOOST_ASSERT_MSG(size(0) <= matr1.size(1),
+                             "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
+            SizeMatrix3D_context const sizes(size(0), size(0), size(0));
+            proto::eval(proto::as_expr<Matrix3D_domain>(matr1), sizes);
+            Matrix4D<T> matrix(shape_);
+            for (size_t i = 0; i < size(0); ++i)
+                for (size_t j = 0; j < size(1); ++j)
+                    for (size_t k = 0; k < size(2); ++k)
+                    for (size_t l = 0; l < size(3); ++l){
+                        proto::value(matrix)(i, j, k, l) =
+                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), proto::value(matrix)(i, j, k, l),
+                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                         for (size_t z = r.begin(); z != r.end(); ++z) {
+                                             tmp += proto::value(*this)(z, j, k, l) * proto::value(matr1)(z, i, l);
+                                         } return tmp; }, std::plus<T>());
+                    }
+            return matrix;
+        }
+        if constexpr(Index == 'j') {
+            BOOST_ASSERT_MSG(size(0) <= matr1.size(1),
+                             "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == j");
+            SizeMatrix3D_context const sizes(size(1), size(1), size(1));
+            proto::eval(proto::as_expr<Matrix3D_domain>(matr1), sizes);
+            Matrix4D<T> matrix(shape_);
+            for (size_t i = 0; i < size(0); ++i)
+                for (size_t j = 0; j < size(1); ++j)
+                    for (size_t k = 0; k < size(2); ++k)
+                    for (size_t l = 0; l < size(3); ++l){
+                        proto::value(matrix)(i, j, k, l) =
+                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k, l),
+                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                         for (size_t z = r.begin(); z != r.end(); ++z) {
+                                             tmp += proto::value(*this)(i, z, k, l) * proto::value(matr1)(z, j, l);
+                                         } return tmp; }, std::plus<T>());
+                    }
+            return matrix;
+        }
+        if constexpr(Index == 'k') {
+            BOOST_ASSERT_MSG(size(2) <= matr1.size(1),
+                             "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
+            SizeMatrix3D_context const sizes(size(2), size(2), size(2));
+            proto::eval(proto::as_expr<Matrix3D_domain>(matr1), sizes);
+            Matrix4D<T> matrix(shape_);
+            for (size_t i = 0; i < size(0); ++i)
+                for (size_t j = 0; j < size(1); ++j)
+                    for (size_t k = 0; k < size(2); ++k)
+                    for (size_t l = 0; l < size(3); ++l){
+                        proto::value(matrix)(i, j, k, l) =
+                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(i, j, k, l),
+                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                         for (size_t z = r.begin(); z != r.end(); ++z) {
+                                             tmp += proto::value(*this)(i, j, z, l) * proto::value(matr1)(z, k, l);
+                                         } return tmp; }, std::plus<T>());
+                    }
+            return matrix;
+        }
+        if constexpr(Index == 'l') {
+            BOOST_ASSERT_MSG(size(2) <= matr1.size(1),
+                             "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
+            SizeMatrix3D_context const sizes(size(3), size(3), size(3));
+            proto::eval(proto::as_expr<Matrix3D_domain>(matr1), sizes);
+            Matrix4D<T> matrix(shape_);
+            for (size_t i = 0; i < size(0); ++i)
+                for (size_t j = 0; j < size(1); ++j)
+                    for (size_t k = 0; k < size(2); ++k)
+                    for (size_t l = 0; l < size(3); ++l){
+                        proto::value(matrix)(i, j, k, l) =
+                                tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(i, j, k, l),
+                                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                         for (size_t z = r.begin(); z != r.end(); ++z) {
+                                             tmp += proto::value(*this)(i, j, k, z) * proto::value(matr1)(z, l, l);
+                                         } return tmp; }, std::plus<T>());
+                    }
+            return matrix;
+        }
     }
     template< typename Expr >
     Matrix4D<T> operator * (Expr const& matr1) {

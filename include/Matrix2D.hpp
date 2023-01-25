@@ -95,6 +95,8 @@ namespace _spatial {
 
         const std::array<size_t, 2>& shape_;
 
+        static constexpr size_t dim = 2;
+
         constexpr Matrix2D(const std::array<size_t, 2>& shape) :
             Matrix2D_expr<expr_type>(expr_type::make(matrix2_<T>(shape))), shape_(shape) {
 
