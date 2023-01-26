@@ -1,24 +1,24 @@
 #pragma once
 #include "../include/Matrix2D.hpp"
 
+proto::terminal< std::ostream & >::type cout_ = {std::cout};
+
 namespace _spatial {
-    template<typename T>
-    struct Matrix4D;
 
     template<typename Expr>
     struct Matrix3D_expr;
 
     struct Matrix3DGrammar : proto::or_<
         proto::terminal<matrix3_<proto::_>>,
-        proto::plus<Matrix3DGrammar, Matrix3DGrammar>,
+//        proto::plus<Matrix3DGrammar, Matrix3DGrammar>,
         proto::minus<Matrix3DGrammar, Matrix3DGrammar>,
         proto::negate< Matrix3DGrammar>,
         proto::less_equal< Matrix3DGrammar, Matrix3DGrammar>,
         proto::greater_equal< Matrix3DGrammar, Matrix3DGrammar>,
         proto::less< Matrix3DGrammar, Matrix3DGrammar>,
         proto::greater< Matrix3DGrammar, Matrix3DGrammar>,
-        proto::not_equal_to< Matrix3DGrammar, Matrix3DGrammar>,
-        proto::equal_to< Matrix3DGrammar, Matrix3DGrammar>
+        proto::not_equal_to< Matrix3DGrammar, Matrix3DGrammar>
+//        proto::equal_to< Matrix3DGrammar, Matrix3DGrammar>
     > {};
     struct Matrix3D_domain : proto::domain<proto::generator<Matrix3D_expr>, Matrix3DGrammar>{};
 
@@ -35,6 +35,7 @@ namespace _spatial {
             result_type operator()(const Expr& expr, Matrix3D_context& ctx) const {
                 return proto::value(expr)(ctx.i, ctx.j, ctx.k);
             }
+
         };
 
     public:
@@ -142,8 +143,8 @@ namespace _spatial {
                                     proto::value(*this)(i, j, k) = dist(gen);
                 }
         }
-        template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<double>> &&
-                                                          std::is_same_v<F, double>>>
+        template<typename F, typename = std::enable_if_t<std::is_same_v<T, std::complex<typename _my::is_type<F>::type>> &&
+                                                          std::is_same_v<F, typename _my::is_type<F>::type>>>
         void Random(F min, F max) {
             std::time_t now = std::time(0);
             boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
@@ -200,6 +201,51 @@ namespace _spatial {
                 });
             return *this;
         }
+        template< typename Expr >
+        bool operator == (Expr const& expr) {
+            SizeMatrix3D_context const sizes(size(0), size(1), size(2));
+            proto::eval(proto::as_expr<Matrix3D_domain>(expr), sizes);
+            size_t tmp_ = tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }), size_t(0),
+                    [=](const range_tbb& out, size_t tmp) {
+                    const auto& out_i = out.dim(0);
+                    const auto& out_j = out.dim(1);
+                    const auto& out_k = out.dim(2);
+                    for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                        for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                            for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                                tmp += proto::value(*this)(i, j, k) != expr(i, j, k) ? 1 : 0;
+                    return tmp; }, std::plus<size_t>() );
+            size_t tmp2_ = tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }), size_t(0),
+                    [=](const range_tbb& out, size_t tmp) {
+                    const auto& out_i = out.dim(0);
+                    const auto& out_j = out.dim(1);
+                    const auto& out_k = out.dim(2);
+                    for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                        for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                            for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                                tmp += proto::value(*this)(i, j, k) == expr(i, j, k) ? 1 : 0;
+                    return tmp; }, std::plus<size_t>() );
+            std::cout << "EQUAL = " << tmp_ << "; " << tmp2_ << std::endl;
+            if(tmp_ == 0) return true;
+            else return false;
+        }
+        template< typename Expr >
+        Matrix3D<T> operator + (Expr const& expr) {
+            SizeMatrix3D_context const sizes(size(0), size(1), size(2));
+            proto::eval(proto::as_expr<Matrix3D_domain>(expr), sizes);
+            Matrix3D<T> matrix(shape_);
+            tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }),
+                [&](const range_tbb& out) {
+                    const auto& out_i = out.dim(0);
+                    const auto& out_j = out.dim(1);
+                    const auto& out_k = out.dim(2);
+                    for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                        for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                            for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                                proto::value(matrix)(i, j, k) = proto::value(*this)(i, j, k) + expr(i, j, k);
+                });
+            return matrix;
+        }
         Matrix3D<T> operator + (const T val) const {
             Matrix3D<T> matrix(shape_);
             tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }),
@@ -223,16 +269,20 @@ namespace _spatial {
                 SizeMatrix2D_context const sizes(size(0), size(0));
                 proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
                 Matrix3D<T> matrix(shape_);
-                for (size_t i = 0; i < size(0); ++i)
-                    for (size_t j = 0; j < size(1); ++j)
-                        for (size_t k = 0; k < size(2); ++k) {
-                            proto::value(matrix)(i, j, k) =
-                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), proto::value(matrix)(i, j, k),
-                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                             for (size_t l = r.begin(); l != r.end(); ++l) {
-                                                 tmp += proto::value(*this)(l, j, k) * proto::value(matr1)(l, i);
-                                             } return tmp; }, std::plus<T>());
-                        }
+                auto value_element([&](size_t i, size_t j, size_t k) {
+                    for (size_t l = 0; l < size(0); ++l)
+                        proto::value(matrix)(i, j, k) += proto::value(*this)(l, j, k) * proto::value(matr1)(l, i);
+                });
+                tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }),
+                    [&](const range_tbb& out) {
+                        const auto& out_i = out.dim(0);
+                        const auto& out_j = out.dim(1);
+                        const auto& out_k = out.dim(2);
+                        for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                            for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                                for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                                        value_element(i, j, k);
+                    });
                 return matrix;
             }
             if constexpr(Index == 'j') {
@@ -241,16 +291,20 @@ namespace _spatial {
                 SizeMatrix2D_context const sizes(size(1), size(1));
                 proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
                 Matrix3D<T> matrix(shape_);
-                for (size_t i = 0; i < size(0); ++i)
-                    for (size_t j = 0; j < size(1); ++j)
-                        for (size_t k = 0; k < size(2); ++k) {
-                            proto::value(matrix)(i, j, k) =
-                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k),
-                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                             for (size_t l = r.begin(); l != r.end(); ++l) {
-                                                 tmp += proto::value(*this)(i, l, k) * proto::value(matr1)(l, j);
-                                             } return tmp; }, std::plus<T>());
-                        }
+                auto value_element([&](size_t i, size_t j, size_t k) {
+                    for (size_t l = 0; l < size(1); ++l)
+                        proto::value(matrix)(i, j, k) += proto::value(*this)(i, l, k) * proto::value(matr1)(l, j);
+                });
+                tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }),
+                    [&](const range_tbb& out) {
+                        const auto& out_i = out.dim(0);
+                        const auto& out_j = out.dim(1);
+                        const auto& out_k = out.dim(2);
+                        for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                            for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                                for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                                        value_element(i, j, k);
+                    });
                 return matrix;
             }
             if constexpr(Index == 'k') {
@@ -259,16 +313,20 @@ namespace _spatial {
                 SizeMatrix2D_context const sizes(size(2), size(2));
                 proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
                 Matrix3D<T> matrix(shape_);
-                for (size_t i = 0; i < size(0); ++i)
-                    for (size_t j = 0; j < size(1); ++j)
-                        for (size_t k = 0; k < size(2); ++k) {
-                            proto::value(matrix)(i, j, k) =
-                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(i, j, k),
-                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                             for (size_t l = r.begin(); l != r.end(); ++l) {
-                                                 tmp += proto::value(*this)(i, j, l) * proto::value(matr1)(l, k);
-                                             } return tmp; }, std::plus<T>());
-                        }
+                auto value_element([&](size_t i, size_t j, size_t k) {
+                    for (size_t l = 0; l < size(2); ++l)
+                        proto::value(matrix)(i, j, k) += proto::value(*this)(i, j, l) * proto::value(matr1)(l, k);
+                });
+                tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }),
+                    [&](const range_tbb& out) {
+                        const auto& out_i = out.dim(0);
+                        const auto& out_j = out.dim(1);
+                        const auto& out_k = out.dim(2);
+                        for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                            for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                                for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                                        value_element(i, j, k);
+                    });
                 return matrix;
             }
         }
@@ -283,17 +341,22 @@ namespace _spatial {
                                  "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
                 std::array<size_t, 4> shape4D = { {size(0), size(0), size(1), size(2)} };
                 Matrix4D<T> matrix(shape4D);
-                for (size_t k1 = 0; k1 < size(0); ++k1)
-                    for (size_t k2 = 0; k2 < size(1); ++k2)
-                        for (size_t k3 = 0; k3 < size(2); ++k3)
-                        for (size_t k4 = 0; k4 < size(2); ++k4){
-                            proto::value(matrix)(k1, k2, k3, k4) =
-                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(k1, k2, k3, k4),
-                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                             for (size_t l = r.begin(); l != r.end(); ++l) {
-                                                 tmp += proto::value(*this)(l, k2, k3) * proto::value(matr1)(l, k1, k4);
-                                             } return tmp; }, std::plus<T>());
-                        }
+                auto value_element([&](size_t k1, size_t k2, size_t k3, size_t k4) {
+                    for (size_t l = 0; l < size(2); ++l)
+                        proto::value(matrix)(k1, k2, k3, k4) += proto::value(*this)(l, k2, k3) * proto::value(matr1)(l, k1, k4);
+                });
+                tbb::parallel_for(range_tbb4({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }, { 0, size(2) }),
+                    [&](const range_tbb4& out) {
+                        const auto& out_k1 = out.dim(0);
+                        const auto& out_k2 = out.dim(1);
+                        const auto& out_k3 = out.dim(2);
+                        const auto& out_k4 = out.dim(3);
+                        for (size_t k1 = out_k1.begin(); k1 < out_k1.end(); ++k1)
+                            for (size_t k2 = out_k2.begin(); k2 < out_k2.end(); ++k2)
+                                for (size_t k3 = out_k3.begin(); k3 < out_k3.end(); ++k3)
+                                    for (size_t k4 = out_k4.begin(); k4 < out_k4.end(); ++k4)
+                                        value_element(k1, k2, k3, k4);
+                    });
                 return matrix;
             }
             if constexpr(Index == 'j') {
@@ -301,17 +364,22 @@ namespace _spatial {
                                  "MATRICES 3D * 3D SIZE IS NOT EQUAL, Index == j");
                 std::array<size_t, 4> shape4D = { {size(0), size(1), size(1), size(2)} };
                 Matrix4D<T> matrix(shape4D);
-                for (size_t k1 = 0; k1 < size(0); ++k1)
-                    for (size_t k2 = 0; k2 < size(1); ++k2)
-                        for (size_t k3 = 0; k3 < size(1); ++k3)
-                        for (size_t k4 = 0; k4 < size(2); ++k4){
-                            proto::value(matrix)(k1, k2, k3, k4) =
-                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(k1, k2, k3, k4),
-                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                             for (size_t l = r.begin(); l != r.end(); ++l) {
-                                                 tmp += proto::value(*this)(k1, l, k3) * proto::value(matr1)(l, k2, k4);
-                                             } return tmp; }, std::plus<T>());
-                        }
+                auto value_element([&](size_t k1, size_t k2, size_t k3, size_t k4) {
+                    for (size_t l = 0; l < size(1); ++l)
+                        proto::value(matrix)(k1, k2, k3, k4) += proto::value(*this)(k1, l, k3) * proto::value(matr1)(l, k2, k4);
+                });
+                tbb::parallel_for(range_tbb4({ 0, size(0) }, { 0, size(1) }, { 0, size(1) }, { 0, size(2) }),
+                    [&](const range_tbb4& out) {
+                        const auto& out_k1 = out.dim(0);
+                        const auto& out_k2 = out.dim(1);
+                        const auto& out_k3 = out.dim(2);
+                        const auto& out_k4 = out.dim(3);
+                        for (size_t k1 = out_k1.begin(); k1 < out_k1.end(); ++k1)
+                            for (size_t k2 = out_k2.begin(); k2 < out_k2.end(); ++k2)
+                                for (size_t k3 = out_k3.begin(); k3 < out_k3.end(); ++k3)
+                                    for (size_t k4 = out_k4.begin(); k4 < out_k4.end(); ++k4)
+                                        value_element(k1, k2, k3, k4);
+                    });
                 return matrix;
             }
             if constexpr(Index == 'k') {
@@ -319,17 +387,22 @@ namespace _spatial {
                                  "MATRICES 3D * 3D SIZE IS NOT EQUAL, Index == i");
                 std::array<size_t, 4> shape4D = { {size(0), size(1), size(2), size(2)} };
                 Matrix4D<T> matrix(shape4D);
-                for (size_t k1 = 0; k1 < size(0); ++k1)
-                    for (size_t k2 = 0; k2 < size(1); ++k2)
-                        for (size_t k3 = 0; k3 < size(2); ++k3)
-                        for (size_t k4 = 0; k4 < size(2); ++k4){
-                            proto::value(matrix)(k1, k2, k3, k4) =
-                                    tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), proto::value(matrix)(k1, k2, k3, k4),
-                                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                             for (size_t l = r.begin(); l != r.end(); ++l) {
-                                                 tmp += proto::value(*this)(k1, k2, l) * proto::value(matr1)(l, k3, k4);
-                                             } return tmp; }, std::plus<T>());
-                        }
+                auto value_element([&](size_t k1, size_t k2, size_t k3, size_t k4) {
+                    for (size_t l = 0; l < size(2); ++l)
+                        proto::value(matrix)(k1, k2, k3, k4) += proto::value(*this)(k1, k2, l) * proto::value(matr1)(l, k3, k4);
+                });
+                tbb::parallel_for(range_tbb4({ 0, size(0) }, { 0, size(0) }, { 0, size(1) }, { 0, size(2) }),
+                    [&](const range_tbb4& out) {
+                        const auto& out_k1 = out.dim(0);
+                        const auto& out_k2 = out.dim(1);
+                        const auto& out_k3 = out.dim(2);
+                        const auto& out_k4 = out.dim(3);
+                        for (size_t k1 = out_k1.begin(); k1 < out_k1.end(); ++k1)
+                            for (size_t k2 = out_k2.begin(); k2 < out_k2.end(); ++k2)
+                                for (size_t k3 = out_k3.begin(); k3 < out_k3.end(); ++k3)
+                                    for (size_t k4 = out_k4.begin(); k4 < out_k4.end(); ++k4)
+                                        value_element(k1, k2, k3, k4);
+                    });
                 return matrix;
             }
         }
@@ -470,6 +543,12 @@ namespace _spatial {
                             for (size_t k = out_k.begin(); k < out_k.end(); ++k)
                                 tmp += std::pow(-1, _my::invers<3>(i, j, k))*DET_orient('i', i)*DET_orient('j', j)*DET_orient('k', k);
                     return tmp; }, std::plus<T>() );
+        }
+        template< typename Expr >
+        void evaluate( Expr const & expr )
+        {
+            proto::default_context ctx;
+            proto::eval(expr, ctx);
         }
 
         friend std::ostream& operator << (std::ostream& os, const Matrix3D<T>& A) {

@@ -9,7 +9,7 @@ struct Matrix4D_expr;
 
 struct Matrix4DGrammar : proto::or_<
                               proto::terminal<matrix4_<proto::_>>,
-                              proto::plus<Matrix4DGrammar, Matrix4DGrammar>,
+//                              proto::plus<Matrix4DGrammar, Matrix4DGrammar>,
                               proto::minus<Matrix4DGrammar, Matrix4DGrammar>,
                               proto::negate< Matrix4DGrammar>,
                               proto::less_equal< Matrix4DGrammar, Matrix4DGrammar>,
@@ -126,8 +126,8 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                                 proto::value(*this)(i, j, k, l) = dist(gen);
             }
     }
-    template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<double>> &&
-                                                      std::is_same_v<F, double>>>
+    template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<typename _my::is_type<F>::type>> &&
+                                                      std::is_same_v<F, typename _my::is_type<F>::type>>>
     void Random(F min, F max) {
         std::time_t now = std::time(0);
         boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
@@ -173,6 +173,57 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                             proto::value(*this)(i, j, k, l) += expr(i, j, k, l);
         });
         return *this;
+    }
+    template< typename Expr >
+    Matrix4D<T> operator + (Expr const & expr) {
+        SizeMatrix4D_context const sizes(size(0), size(1), size(2), size(3));
+        proto::eval(proto::as_expr<Matrix4D_domain>(expr), sizes);
+        Matrix4D<T> matrix(shape_);
+        tbb::parallel_for(range_tbb({0, size(0)}, {0, size(1)}, {0, size(2)}, {0, size(3)}),
+        [&](const range_tbb& out){
+            const auto& out_i = out.dim(0);
+            const auto& out_j = out.dim(1);
+            const auto& out_k = out.dim(2);
+            const auto& out_l = out.dim(3);
+            for(size_t i = out_i.begin(); i < out_i.end(); ++i)
+                for(size_t j = out_j.begin(); j < out_j.end(); ++j)
+                    for(size_t k = out_k.begin(); k < out_k.end(); ++k)
+                        for(size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) + expr(i, j, k, l);
+        });
+        return matrix;
+    }
+    template< typename Expr >
+    bool operator == (Expr const& expr) {
+        SizeMatrix4D_context const sizes(size(0), size(1), size(2), size(3));
+        proto::eval(proto::as_expr<Matrix4D_domain>(expr), sizes);
+        size_t tmp_ = tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }, { 0, size(2) }), size_t(0),
+                [=](const range_tbb& out, size_t tmp) {
+                const auto& out_i = out.dim(0);
+                const auto& out_j = out.dim(1);
+                const auto& out_k = out.dim(2);
+                const auto& out_l = out.dim(3);
+                for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                    for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                        for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                            for (size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            tmp += proto::value(*this)(i, j, k, l) != expr(i, j, k, l) ? 1 : 0;
+                return tmp; }, std::plus<size_t>() );
+        size_t tmp2_ = tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }, { 0, size(2) }), size_t(0),
+                [=](const range_tbb& out, size_t tmp) {
+                const auto& out_i = out.dim(0);
+                const auto& out_j = out.dim(1);
+                const auto& out_k = out.dim(2);
+                const auto& out_l = out.dim(3);
+                for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                    for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                        for (size_t k = out_k.begin(); k < out_k.end(); ++k)
+                            for (size_t l = out_l.begin(); l < out_l.end(); ++l)
+                            tmp += proto::value(*this)(i, j, k, l) == expr(i, j, k, l) ? 1 : 0;
+                return tmp; }, std::plus<size_t>() );
+        std::cout << "EQUAL = " << tmp_ << "; " << tmp2_ << std::endl;
+        if(tmp_ == 0) return true;
+        else return false;
     }
     template<char Index, typename F, typename =
              std::enable_if_t<std::is_same_v<T, F> && (Index == 'i' || Index == 'j' || Index == 'k' || Index == 'l')> >

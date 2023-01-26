@@ -74,12 +74,14 @@ namespace _spatial {
     /////////MATRIX3D
     template<typename T>
     struct matrix3_ : boost::multi_array<T, 3> {
+        using range_tbb = tbb::blocked_rangeNd<size_t, 3>;
         typedef boost::multi_array<T, 3> array_type;
         typedef boost::multi_array_types::index_range range;
         typedef typename array_type::template array_view<1>::type sub_matrix_view1D;
         typedef typename array_type::template array_view<2>::type sub_matrix_view2D;
         typedef typename array_type::template array_view<3>::type sub_matrix_view3D;
         typedef T value_type;
+        array_type MTRX;
     public:
         constexpr matrix3_(const std::array<size_t, 3>& shape) : array_type(shape) {}
         constexpr matrix3_(size_t N, size_t M, size_t K) : array_type({ boost::extents[N][M][K] }) {}
@@ -103,6 +105,7 @@ namespace _spatial {
     /////////MATRIX4D
     template<typename T>
     struct matrix4_ : boost::multi_array<T, 4> {
+        using range_tbb = tbb::blocked_rangeNd<size_t, 4>;
         typedef boost::multi_array<T, 4> array_type;
         typedef boost::multi_array_types::index_range range;
         typedef typename array_type::template array_view<1>::type sub_matrix_view1D;
@@ -112,7 +115,7 @@ namespace _spatial {
         typedef T value_type;
         array_type MTRX;
     public:
-        constexpr matrix4_(const std::array<size_t, 4>& shape) : array_type(shape) {}
+        constexpr matrix4_(const std::array<size_t, 4>& shape) : array_type(shape), MTRX(shape) {}
         constexpr matrix4_(size_t N, size_t M, size_t K, size_t L) : array_type({ boost::extents[N][M][K][L] }) {}
 
         constexpr void is_Matrix() {}
@@ -174,8 +177,17 @@ struct IsBigInt : mpl::false_ {};
 template<>
 struct IsBigInt<big::int128_t> : mpl::true_ {};
 
+template<typename T>
+using type_end = typename mpl::if_c<std::is_same_v<T, size_t>, size_t, big::int128_t>::type;
+template<typename T>
+using type_two = typename mpl::if_c<std::is_same_v<T, int>, int, type_end<T> >::type;
+
 ///ABS
 namespace _my {
+template<typename T>
+struct is_type : mpl::if_c<std::is_same_v<T, double>, double,
+                 typename mpl::if_c<std::is_same_v<T, float>, float, type_two<T>>::type
+                > {};
 template<typename T, typename = std::enable_if_t<std::is_same<T, std::complex<double>>::value>>
 inline double abs(const T& x) {
     return std::norm(x);

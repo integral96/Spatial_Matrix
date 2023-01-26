@@ -121,8 +121,8 @@ namespace _spatial {
                                     proto::value(*this)(i, j) = dist(gen);
                 }
         }
-        template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<double>> &&
-                                                          std::is_same_v<F, double>>>
+        template<typename F,  typename = std::enable_if_t<std::is_same_v<T, std::complex<typename _my::is_type<F>::type>> &&
+                                                          std::is_same_v<F, typename _my::is_type<F>::type>>>
         void Random(F min, F max) {
             std::time_t now = std::time(0);
             boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
@@ -178,14 +178,18 @@ namespace _spatial {
             SizeMatrix2D_context const sizes(size(0), size(1));
             proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
             Matrix2D<T> matrix(shape_);
-            for (size_t i = 0; i < size(0); ++i)
-                for (size_t j = 0; j < size(1); ++j)
-                    proto::value(matrix)(i, j) =
-                            tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j),
-                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
-                                     for (size_t k = r.begin(); k != r.end(); ++k) {
-                                         tmp += proto::value(*this)(i, k) * matr1(k, j);
-                                     } return tmp; }, std::plus<T>());
+            auto value_element([&](size_t i, size_t j) {
+                for (size_t l = 0; l < size(1); ++l)
+                    proto::value(matrix)(i, j) += proto::value(*this)(i, l) * matr1(l, j);
+            });
+            tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }),
+                [&](const range_tbb& out) {
+                    const auto& out_i = out.dim(0);
+                    const auto& out_j = out.dim(1);
+                    for (size_t i = out_i.begin(); i < out_i.end(); ++i)
+                        for (size_t j = out_j.begin(); j < out_j.end(); ++j)
+                                    value_element(i, j);
+                });
             return matrix;
         }
 
