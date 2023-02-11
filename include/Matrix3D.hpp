@@ -4,15 +4,9 @@
 #include <vector>
 #include <set>
 #include "../include/Matrix2D.hpp"
+#include "include/maze_weight.hpp"
 
 proto::terminal< std::ostream & >::type cout_ = {std::cout};
-
-static constexpr uint8_t FLOOR = 1;  //00 00 00 01;
-static constexpr uint8_t EAST  = 2;  //00 00 00 10;
-static constexpr uint8_t NORTH = 4;  //00 00 01 00;
-static constexpr uint8_t WEST  = 8;  //00 00 10 00;
-static constexpr uint8_t SOUTH = 16; //00 01 00 00;
-static constexpr uint8_t CEIL  = 32; //00 10 00 00;
 
 namespace _spatial {
 
@@ -138,6 +132,8 @@ namespace _spatial {
         }
 
         Matrix3D<T>& maze(const double horisontal_bias, const double vertical_bias) {
+//            if constexpr(std::is_same_v<T, int> || std::is_same_v<T, std::complex<int>>)
+//                maze_weight<T, Matrix3D> maze_(this);
             static_assert(std::is_same_v<T, int>, "Тип должен быть инт");
             const double east_wall_threshold = horisontal_bias;
             const double south_wall_threshold = vertical_bias;

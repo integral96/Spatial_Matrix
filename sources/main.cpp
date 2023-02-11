@@ -10,6 +10,7 @@
 
 #include "../include/generate.hpp"
 
+
 static constexpr int NI = 9;
 static constexpr int NJ = 9;
 static constexpr int NK = 9;
@@ -56,12 +57,10 @@ int main()
     A4.Random(0.1, 1.2);
     AC4.Random(1.1, 2.2);
     try {
-//        auto& tmp_test = A3_big.maze(.5, .5);
-////        std::cout << tmp_test << std::endl;
-//        generate test(tmp_test);
-//        KNOT A{0, 0, 0};
-//        KNOT B{15, 60, 56};
-//        std::cout << test.path_generate(A, B) << std::endl;
+        maze_weight<int, _spatial::Matrix3D> maze_3D(shape3D);
+        maze_3D.calc_maze(.5, .5);
+        std::cout << maze_3D.get_maze() << std::endl;
+
 
         {
             boost::timer::cpu_timer tmr;

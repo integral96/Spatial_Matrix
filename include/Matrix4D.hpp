@@ -3,8 +3,6 @@
 #include "../include/Matrix3D.hpp"
 
 
-static constexpr uint8_t FORW  = 64;  //01 00 00 00;
-static constexpr uint8_t BACKW = 128; //10 00 00 00;
 
 namespace _spatial {
 
