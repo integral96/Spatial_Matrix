@@ -2,6 +2,10 @@
 
 #include "../include/Matrix3D.hpp"
 
+
+static constexpr uint8_t FORW  = 64;  //01 00 00 00;
+static constexpr uint8_t BACKW = 128; //10 00 00 00;
+
 namespace _spatial {
 
 template<typename Expr>
@@ -16,8 +20,8 @@ struct Matrix4DGrammar : proto::or_<
                               proto::greater_equal< Matrix4DGrammar, Matrix4DGrammar>,
                               proto::less< Matrix4DGrammar, Matrix4DGrammar>,
                               proto::greater< Matrix4DGrammar, Matrix4DGrammar>,
-                              proto::not_equal_to< Matrix4DGrammar, Matrix4DGrammar>,
-                              proto::equal_to< Matrix4DGrammar, Matrix4DGrammar>
+                              proto::not_equal_to< Matrix4DGrammar, Matrix4DGrammar>
+//                              proto::equal_to< Matrix4DGrammar, Matrix4DGrammar>
                                     >{};
 struct Matrix4D_domain : proto::domain<proto::generator<Matrix4D_expr>, Matrix4DGrammar> {};
 
@@ -175,23 +179,11 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
         return *this;
     }
     template< typename Expr >
-    Matrix4D<T> operator + (Expr const & expr) {
-        SizeMatrix4D_context const sizes(size(0), size(1), size(2), size(3));
+    friend Matrix4D<T> operator + (Matrix4D<T> lhs, Expr const& expr) {
+        SizeMatrix4D_context const sizes(lhs.size(0), lhs.size(1), lhs.size(2), lhs.size(2));
         proto::eval(proto::as_expr<Matrix4D_domain>(expr), sizes);
-        Matrix4D<T> matrix(shape_);
-        tbb::parallel_for(range_tbb({0, size(0)}, {0, size(1)}, {0, size(2)}, {0, size(3)}),
-        [&](const range_tbb& out){
-            const auto& out_i = out.dim(0);
-            const auto& out_j = out.dim(1);
-            const auto& out_k = out.dim(2);
-            const auto& out_l = out.dim(3);
-            for(size_t i = out_i.begin(); i < out_i.end(); ++i)
-                for(size_t j = out_j.begin(); j < out_j.end(); ++j)
-                    for(size_t k = out_k.begin(); k < out_k.end(); ++k)
-                        for(size_t l = out_l.begin(); l < out_l.end(); ++l)
-                            proto::value(matrix)(i, j, k, l) = proto::value(*this)(i, j, k, l) + expr(i, j, k, l);
-        });
-        return matrix;
+        lhs += expr;
+        return lhs;
     }
     template< typename Expr >
     bool operator == (Expr const& expr) {
@@ -428,100 +420,84 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
         });
         return matrix;
     }
-    Matrix3D<T> transversal_matrix(char index, int N) {
-        BOOST_ASSERT_MSG((index == 'i') || (index == 'j') || (index == 'k') || (index == 'l'), "Не совпадение индексов");
+    template<char Index>
+    Matrix3D<T> transversal_matrix(int N) {
+        static_assert((Index == 'i') || (Index == 'j') || (Index == 'k') || (Index == 'l'), "Не совпадение индексов");
         typename array_type::index_gen indices;
-        if (index == 'i') {
+        if constexpr(Index == 'i') {
             std::array<size_t, 3> shi{ {size(1), size(2), size(3)} };
             Matrix3D<T> tmp(shi);
             tmp = proto::value(*this)[indices[N][range(0, size(1))][range(0, size(2))][range(0, size(3))]];
             return tmp;
-        } else if (index == 'j') {
+        } else if constexpr(Index == 'j') {
             std::array<size_t, 3> shj{ {size(0), size(2), size(3)} };
             Matrix3D<T> tmp(shj);
             tmp = proto::value(*this)[indices[range(0, size(0))][N][range(0, size(2))][range(0, size(3))]];
             return tmp;
-        } else if (index == 'k') {
+        } else if constexpr(Index == 'k') {
             std::array<size_t, 3> shk{ {size(0), size(1), size(3)} };
             Matrix3D<T> tmp(shk);
             tmp = proto::value(*this)[indices[range(0, size(0))][range(0, size(1))][N][range(0, size(3))]];
             return tmp;
-        } else if (index == 'l') {
+        } else if constexpr(Index == 'l') {
             std::array<size_t, 3> shl{ {size(0), size(1), size(2)} };
             Matrix3D<T> tmp(shl);
             tmp = proto::value(*this)[indices[range(0, size(0))][range(0, size(1))][range(0, size(2))][N]];
             return tmp;
         }
     }
-    std::vector<T> transversal_vector(char index, int N)  {
-        BOOST_ASSERT_MSG((index == 'i') || (index == 'j') || (index == 'k') || (index == 'l'), "Не совпадение индексов");
-        typename array_type::index_gen indices;
+    template<char Index>
+    std::vector<T> transversal_vector(int indx)  {
+        static_assert((Index == 'i') || (Index == 'j') || (Index == 'k') || (Index == 'l'), "Не совпадение индексов");
         std::vector<T> transversal_vector;
         transversal_vector.reserve(size(0)*size(1)*size(2)*size(3));
-        struct index3D { int J; int K; int L; };
-        auto predicate([s_ = std::max({size(0), size(1), size(2), size(3)})](int IndexN, std::vector<index3D>& indexJKL) -> bool {
-            int j{};
-            do {
-                j = IndexN == 0 ? IndexN : IndexN - 1;
-                if (j >= 0 && j < indexJKL.size() - 1)
-                    while ((indexJKL[j].J >= indexJKL[j + 1].J)
-                        && (indexJKL[j].K >= indexJKL[j + 1].K)
-                        && (indexJKL[j].L >= indexJKL[j + 1].L)) j--;
-                else j++;
+        std::function<size_t(size_t, size_t)> permutation_rec;
+        permutation_rec = [&permutation_rec](size_t N, size_t K) {
+            size_t tmp = 0;
+            if( N <= 0 || K <= 0) {
+                tmp = 0;
+            } else {
+                tmp = (N - 1)*permutation_rec(N - 1, K) + permutation_rec(N - 1, K - 1);
+            }
+            return tmp;
+        };
 
-            } while (j > (int)s_ - 1);
-            if (j < 0) return false;
-            else return true;
-        });
-
-        if (index == 'i') {
-            std::vector<index3D> tmp;
-            tmp.reserve(size(0)*size(0)*size(2)*size(3));
+        if constexpr(Index == 'i') {
             for (size_t j = 0; j != size(1); ++j) {
                 for (size_t k = 0; k != size(2); ++k) {
                     for (size_t l = 0; l != size(3); ++l) {
-                        tmp.push_back({int(j), int(k), int(l)});
-                        if(predicate(int(N), tmp)){
-                            transversal_vector.push_back(transversal_matrix('i', N)(j, k, l));
+                        if(permutation_rec(size(0), indx)%2 == 0){
+                            transversal_vector.push_back(transversal_matrix<'i'>(indx)(j, k, l));
                         }
                     }
                 }
             }
-        } else if (index == 'j') {
-            std::vector<index3D> tmp;
-            tmp.reserve(size(0)*size(0)*size(2)*size(3));
+        } else if constexpr(Index == 'j') {
             for (size_t i = 0; i != size(0); ++i) {
                 for (size_t k = 0; k != size(2); ++k) {
                     for (size_t l = 0; l != size(3); ++l) {
-                        tmp.push_back({int(i), int(k), int(l)});
-                        if(predicate(int(N), tmp)){
-                            transversal_vector.push_back(transversal_matrix('j', N)(i, k, l));
+                        if(permutation_rec(size(1), indx)%2 == 0){
+                            transversal_vector.push_back(transversal_matrix<'j'>(indx)(i, k, l));
                         }
                     }
                 }
             }
-        } else if (index == 'k') {
-            std::vector<index3D> tmp;
-            tmp.reserve(size(0)*size(0)*size(2)*size(3));
+        } else if constexpr(Index == 'k') {
             for (size_t i = 0; i != size(0); ++i) {
                 for (size_t j = 0; j != size(1); ++j) {
                     for (size_t l = 0; l != size(3); ++l) {
-                        tmp.push_back({int(i), int(j), int(l)});
-                        if(predicate(int(N), tmp)){
-                            transversal_vector.push_back(transversal_matrix('k', N)(i, j, l));
+                        if(permutation_rec(size(2), indx)%2 == 0){
+                            transversal_vector.push_back(transversal_matrix<'k'>(indx)(i, j, l));
                         }
                     }
                 }
             }
-        } else if (index == 'l') {
-            std::vector<index3D> tmp;
-            tmp.reserve(size(0)*size(0)*size(2)*size(3));
+        } else if constexpr(Index == 'l') {
             for (size_t i = 0; i != size(0); ++i) {
                 for (size_t j = 0; j != size(1); ++j) {
                     for (size_t k = 0; k != size(2); ++k) {
-                        tmp.push_back({int(i), int(j), int(k)});
-                        if(predicate(int(N), tmp)){
-                            transversal_vector.push_back(transversal_matrix('k', N)(i, j, k));
+                        if(permutation_rec(size(3), indx)%2 == 0){
+                            transversal_vector.push_back(transversal_matrix<'k'>(indx)(i, j, k));
                         }
                     }
                 }
@@ -529,32 +505,32 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
         }
         return transversal_vector;
     }
-
-    T DET_orient(char index, int N) {
-        BOOST_ASSERT_MSG((index == 'i') || (index == 'j') || (index == 'k') || (index == 'l'), "Не совпадение индексов");
-        if(index == 'i') {
+    template<char Index>
+    T DET_orient(int indx) {
+        BOOST_STATIC_ASSERT_MSG((Index == 'i') || (Index == 'j') || (Index == 'k') || (Index == 'l'), "Не совпадение индексов");
+        if constexpr(Index == 'i') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), T(1),
                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
-                            tmp *= transversal_vector('i', N)[i];
+                            tmp *= transversal_vector<'i'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
-        } else if(index == 'j') {
+        } else if constexpr(Index == 'j') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), T(1),
                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
-                            tmp *= transversal_vector('j', N)[i];
+                            tmp *= transversal_vector<'j'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
-        } else if(index == 'k') {
+        } else if constexpr(Index == 'k') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), T(1),
                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
-                            tmp *= transversal_vector('k', N)[i];
+                            tmp *= transversal_vector<'k'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
-        } else if(index == 'l') {
+        } else if constexpr(Index == 'l') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(3)), T(1),
                     [=](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
-                            tmp *= transversal_vector('l', N)[i];
+                            tmp *= transversal_vector<'l'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
         }
     }
@@ -569,7 +545,8 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                     for (size_t j = out_j.begin(); j < out_j.end(); ++j)
                         for (size_t k = out_k.begin(); k < out_k.end(); ++k)
                             for (size_t l = out_l.begin(); l < out_l.end(); ++l)
-                            tmp += std::pow(-1, _my::invers<4>(i, j, k, l))*DET_orient('i', i)*DET_orient('j', j)*DET_orient('k', k)*DET_orient('l', l);
+                                tmp += std::pow(-1, _my::invers_loop<4>({i, j, k, l})[i] + _my::invers_loop<4>({i, j, k, l})[j] + _my::invers_loop<4>({i, j, k, l})[k] + _my::invers_loop<4>({i, j, k, l})[l])
+                                        *DET_orient<'i'>(i)*DET_orient<'j'>(j)*DET_orient<'k'>(k)*DET_orient<'l'>(l);
                 return tmp; }, std::plus<T>() );
     }
 

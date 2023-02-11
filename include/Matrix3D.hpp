@@ -1,7 +1,18 @@
 #pragma once
+
+#include <map>
+#include <vector>
+#include <set>
 #include "../include/Matrix2D.hpp"
 
 proto::terminal< std::ostream & >::type cout_ = {std::cout};
+
+static constexpr uint8_t FLOOR = 1;  //00 00 00 01;
+static constexpr uint8_t EAST  = 2;  //00 00 00 10;
+static constexpr uint8_t NORTH = 4;  //00 00 01 00;
+static constexpr uint8_t WEST  = 8;  //00 00 10 00;
+static constexpr uint8_t SOUTH = 16; //00 01 00 00;
+static constexpr uint8_t CEIL  = 32; //00 10 00 00;
 
 namespace _spatial {
 
@@ -11,7 +22,7 @@ namespace _spatial {
     struct Matrix3DGrammar : proto::or_<
         proto::terminal<matrix3_<proto::_>>,
 //        proto::plus<Matrix3DGrammar, Matrix3DGrammar>,
-        proto::minus<Matrix3DGrammar, Matrix3DGrammar>,
+//        proto::minus<Matrix3DGrammar, Matrix3DGrammar>,
         proto::negate< Matrix3DGrammar>,
         proto::less_equal< Matrix3DGrammar, Matrix3DGrammar>,
         proto::greater_equal< Matrix3DGrammar, Matrix3DGrammar>,
@@ -100,12 +111,12 @@ namespace _spatial {
 
         const std::array<size_t, 3>& shape_;
         static constexpr size_t dim = 3;
-        constexpr Matrix3D(const std::array<size_t, 3>& shape) :
+        Matrix3D(const std::array<size_t, 3>& shape) :
             Matrix3D_expr<expr_type>(expr_type::make(matrix3_<T>(shape))), shape_(shape) {
 
         }
         template<typename Expr, typename  = std::enable_if_t<std::is_convertible_v<Expr::expr_type, T>>>
-        constexpr Matrix3D(const Expr& matrix) :
+        Matrix3D(const Expr& matrix) :
             Matrix3D_expr<expr_type>(expr_type::make(matrix3_<T>(matrix.shape_))), shape_(matrix.shape_) {
             SizeMatrix3D_context const sizes(size(0), size(1), size(2));
             proto::eval(proto::as_expr<Matrix3D_domain>(matrix), sizes);
@@ -124,6 +135,145 @@ namespace _spatial {
         size_t size(size_t i) const {
             BOOST_ASSERT_MSG((i < 3), "Error i >= 4");
             return proto::value(*this).shape()[i];
+        }
+
+        Matrix3D<T>& maze(const double horisontal_bias, const double vertical_bias) {
+            static_assert(std::is_same_v<T, int>, "Тип должен быть инт");
+            const double east_wall_threshold = horisontal_bias;
+            const double south_wall_threshold = vertical_bias;
+            using vector_pos_type = std::vector<std::tuple<int, int, int>>;
+            using passages_type = std::vector<std::tuple<int, int, int, int, int, int>>;
+            std::map<size_t, vector_pos_type> room_set;
+            std::map<int, int> merged_room_sets;
+            passages_type passages;
+            int room_value;
+            int east_room_value;
+            int south_room_value;
+            auto calc_cell_values([this] (const passages_type& passages_) {
+                for(size_t i = 0; i < size(0); ++i)
+                    for(size_t j = 0; j < size(1); ++j)
+                        for(size_t k = 0; k < size(2); ++k)
+                                proto::value(*this)(i, j, k) = 6;
+                int i_from, i_to;
+                int j_from, j_to;
+                int k_from, k_to;
+                uint8_t cell_num_to;
+                uint8_t cell_num_from;
+                for(auto& pass : passages_) {
+                    std::tie(i_from, j_from, k_from, i_to, j_to, k_to) = pass;
+                    cell_num_from = proto::value(*this)(i_from, j_from, k_from);
+                    cell_num_to   = proto::value(*this)(i_to, j_to, k_to);
+                    if(i_from != i_to) {
+                        proto::value(*this)(i_from, j_from, k_from) = cell_num_from & ~(SOUTH);
+                        proto::value(*this)(i_to, j_to, k_to)       = cell_num_to   & ~(NORTH);
+                    } else if(j_from != j_to) {
+                        proto::value(*this)(i_from, j_from, k_from) = cell_num_from & ~(EAST);
+                        proto::value(*this)(i_to, j_to, k_to)       = cell_num_to   & ~(WEST);
+                    } else if(k_from != k_to) {
+                        proto::value(*this)(i_from, j_from, k_from) = cell_num_from & ~(CEIL);
+                        proto::value(*this)(i_to, j_to, k_to)       = cell_num_to   & ~(FLOOR);
+                    }
+                }
+            });
+            for(size_t i = 0; i < size(0); ++i)
+                for(size_t j = 0; j < size(1); ++j)
+                    for(size_t k = 0; k < size(2); ++k)
+                            proto::value(*this)(i, j, k) += k + size(2)*(j + size(1)*i);
+
+            srand(time(NULL));
+            for(size_t k = 0; k < size(2) - 1; k++) {
+                for(size_t i = 0; i < size(0); i++) {
+                    for(size_t j = 0; j < size(1); j++) {
+                        room_value = proto::value(*this)(i, j, k);
+                        if(merged_room_sets.find(room_value) != merged_room_sets.end()) {
+                            room_value = merged_room_sets[room_value];
+                        } else {
+                            merged_room_sets[room_value] = room_value;
+                        }
+                        if(j < size(1) - 1) {
+                            east_room_value = (merged_room_sets.find(proto::value(*this)(i, j + 1, k)) != merged_room_sets.end()) ?
+                                                merged_room_sets[proto::value(*this)(i, j + 1, k)] : proto::value(*this)(i, j + 1, k);
+                        }
+                        if(i < size(0) - 1) {
+                            south_room_value = (merged_room_sets.find(proto::value(*this)(i + 1, j, k)) != merged_room_sets.end()) ?
+                                                merged_room_sets[proto::value(*this)(i + 1, j, k)] : proto::value(*this)(i + 1, j, k);
+                        }
+                        room_set[room_value].push_back(std::make_tuple(i, j, k));
+                        if(j == size(1) - 1) {}
+                        else if((rand() < east_wall_threshold*RAND_MAX) && (room_value != east_room_value)) {
+                            vector_pos_type next_room_position_set = room_set[proto::value(*this)(i, j + 1, k)];
+                            room_set[room_value].insert(room_set[room_value].end(), next_room_position_set.begin(), next_room_position_set.end());
+                            room_set.erase(proto::value(*this)(i, j + 1, k));
+                            merged_room_sets[proto::value(*this)(i, j + 1, k)] = room_value;
+                            proto::value(*this)(i, j + 1, k) = room_value;
+                            passages.push_back(std::make_tuple(i, j, k, i, j + 1, k));
+                        }
+                        if(i == size(0) - 1) {}
+                        else if((rand() < south_wall_threshold*RAND_MAX) && (room_value != south_room_value)) {
+                            proto::value(*this)(i + 1, j, k) = room_value;
+                            passages.push_back(std::make_tuple(i, j, k, i + 1, j, k));
+                        }
+                    }
+                }
+                merged_room_sets.clear();
+                for(auto entry : room_set) {
+                    auto group = entry.second;
+                    int x, y, z;
+                    std::tie(y, x, z) = group.at(rand()%group.size());
+                    passages.push_back(std::make_tuple(y, x, z, y, x, z + 1));
+                }
+                room_set.clear();
+            }
+            int floor = size(2) - 1;
+            std::set<int> can_go_south;
+            for(size_t i = 0; i < size(0) - 1; i++) {
+                for(size_t j = 0; j < size(1); j++) {
+                    room_value = proto::value(*this)(i, j, floor);
+                    if(merged_room_sets.find(room_value) != merged_room_sets.end()) {
+                        room_value = merged_room_sets[room_value];
+                    } else {
+                        merged_room_sets[room_value] = room_value;
+                    }
+                    if(j < size(1) - 1) {
+                        east_room_value = (merged_room_sets.find(proto::value(*this)(i, j + 1, floor)) != merged_room_sets.end()) ?
+                                            merged_room_sets[proto::value(*this)(i, j + 1, floor)] : proto::value(*this)(i, j + 1, floor);
+                    }
+                    south_room_value = (merged_room_sets.find(proto::value(*this)(i + 1, j, floor)) != merged_room_sets.end()) ?
+                                        merged_room_sets[proto::value(*this)(i + 1, j, floor)] : proto::value(*this)(i + 1, j, floor);
+                    if(j == size(1) - 1) {}
+                    else if((rand() < east_wall_threshold*RAND_MAX) && (room_value != east_room_value)) {
+                        passages.push_back(std::make_tuple(i, j, floor, i, j + 1, floor));
+                        merged_room_sets[east_room_value] = room_value;
+                        proto::value(*this)(i, j + 1, floor) = room_value;
+                    }
+                    if(((rand() < south_wall_threshold*RAND_MAX) || (can_go_south.find(room_value) == can_go_south.end()))
+                            && (room_value != south_room_value)) {
+                        passages.push_back(std::make_tuple(i, j, floor, i + 1, j, floor));
+                        merged_room_sets[south_room_value] = room_value;
+                        proto::value(*this)(i + 1, j, floor) = room_value;
+                        can_go_south.insert(room_value);
+                    }
+                }
+                can_go_south.clear();
+            }
+            int row = size(0) - 1;
+            for(size_t j = 0; j < size(1) - 1; j++) {
+                room_value = proto::value(*this)(row, j, floor);
+                if(merged_room_sets.find(room_value) != merged_room_sets.end()) {
+                    room_value = merged_room_sets[room_value];
+                } else {
+                    merged_room_sets[room_value] = room_value;
+                }
+                east_room_value = (merged_room_sets.find(proto::value(*this)(row, j + 1, floor)) != merged_room_sets.end()) ?
+                                    merged_room_sets[proto::value(*this)(row, j + 1, floor)] : proto::value(*this)(row, j + 1, floor);
+                if(room_value != east_room_value) {
+                    passages.push_back(std::make_tuple(row, j, floor, row, j + 1, floor));
+                    merged_room_sets[east_room_value] = room_value;
+                    proto::value(*this)(row, j + 1, floor) = room_value;
+                }
+            }
+            calc_cell_values(passages);
+            return *this;
         }
         void Random(T min, T max, long shift = 0) {
             std::time_t now = std::time(0);
@@ -202,7 +352,7 @@ namespace _spatial {
             return *this;
         }
         template< typename Expr >
-        bool operator == (Expr const& expr) {
+        bool operator == (Expr const& expr) const {
             SizeMatrix3D_context const sizes(size(0), size(1), size(2));
             proto::eval(proto::as_expr<Matrix3D_domain>(expr), sizes);
             size_t tmp_ = tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }), size_t(0),
@@ -230,21 +380,11 @@ namespace _spatial {
             else return false;
         }
         template< typename Expr >
-        Matrix3D<T> operator + (Expr const& expr) {
-            SizeMatrix3D_context const sizes(size(0), size(1), size(2));
+        friend Matrix3D<T> operator + (Matrix3D<T> lhs, Expr const& expr) {
+            SizeMatrix3D_context const sizes(lhs.size(0), lhs.size(1), lhs.size(2));
             proto::eval(proto::as_expr<Matrix3D_domain>(expr), sizes);
-            Matrix3D<T> matrix(shape_);
-            tbb::parallel_for(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }),
-                [&](const range_tbb& out) {
-                    const auto& out_i = out.dim(0);
-                    const auto& out_j = out.dim(1);
-                    const auto& out_k = out.dim(2);
-                    for (size_t i = out_i.begin(); i < out_i.end(); ++i)
-                        for (size_t j = out_j.begin(); j < out_j.end(); ++j)
-                            for (size_t k = out_k.begin(); k < out_k.end(); ++k)
-                                proto::value(matrix)(i, j, k) = proto::value(*this)(i, j, k) + expr(i, j, k);
-                });
-            return matrix;
+            lhs += expr;
+            return lhs;
         }
         Matrix3D<T> operator + (const T val) const {
             Matrix3D<T> matrix(shape_);
@@ -262,14 +402,14 @@ namespace _spatial {
         }
         template<char Index, typename F, typename =
                  std::enable_if_t<std::is_same_v<T, F> && (Index == 'i' || Index == 'j' || Index == 'k')> >
-        Matrix3D<T> product(Matrix2D<F> const& matr1) {
+        Matrix3D<T> product(Matrix2D<F> const& matr1) const {
             if constexpr(Index == 'i') {
                 BOOST_ASSERT_MSG(size(0) <= matr1.size(1),
                                  "MATRICES 3D * 2D SIZE IS NOT EQUAL, Index == i");
                 SizeMatrix2D_context const sizes(size(0), size(0));
                 proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
                 Matrix3D<T> matrix(shape_);
-                auto value_element([&](size_t i, size_t j, size_t k) {
+                auto value_element([this, &matrix, &matr1](size_t i, size_t j, size_t k) {
                     for (size_t l = 0; l < size(0); ++l)
                         proto::value(matrix)(i, j, k) += proto::value(*this)(l, j, k) * proto::value(matr1)(l, i);
                 });
@@ -291,7 +431,7 @@ namespace _spatial {
                 SizeMatrix2D_context const sizes(size(1), size(1));
                 proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
                 Matrix3D<T> matrix(shape_);
-                auto value_element([&](size_t i, size_t j, size_t k) {
+                auto value_element([this, &matrix, &matr1](size_t i, size_t j, size_t k) {
                     for (size_t l = 0; l < size(1); ++l)
                         proto::value(matrix)(i, j, k) += proto::value(*this)(i, l, k) * proto::value(matr1)(l, j);
                 });
@@ -313,7 +453,7 @@ namespace _spatial {
                 SizeMatrix2D_context const sizes(size(2), size(2));
                 proto::eval(proto::as_expr<Matrix2D_domain>(matr1), sizes);
                 Matrix3D<T> matrix(shape_);
-                auto value_element([&](size_t i, size_t j, size_t k) {
+                auto value_element([this, &matrix, &matr1](size_t i, size_t j, size_t k) {
                     for (size_t l = 0; l < size(2); ++l)
                         proto::value(matrix)(i, j, k) += proto::value(*this)(i, j, l) * proto::value(matr1)(l, k);
                 });
@@ -435,100 +575,90 @@ namespace _spatial {
                 });
             return matrix;
         }
-
-        Matrix2D<T> transversal_matrix(char index, int N) {
-            BOOST_ASSERT_MSG((index == 'i') || (index == 'j') || (index == 'k') , "Не совпадение индексов");
+        template<char Index>
+        Matrix2D<T> transversal_matrix(int N) {
+            static_assert((Index == 'i') || (Index == 'j') || (Index == 'k') , "Не совпадение индексов");
             typename array_type::index_gen indices;
-            if (index == 'i') {
+            if constexpr(Index == 'i') {
                 std::array<size_t, 2> shi{ {size(1), size(2)} };
                 Matrix2D<T> tmp(shi);
                 tmp = proto::value(*this)[indices[N][range(0, size(1))][range(0, size(2))]];
                 return tmp;
-            } else if (index == 'j') {
+            } else if constexpr(Index == 'j') {
                 std::array<size_t, 2> shj{ {size(0), size(2)} };
                 Matrix2D<T> tmp(shj);
                 tmp = proto::value(*this)[indices[range(0, size(0))][N][range(0, size(2))]];
                 return tmp;
-            } else if (index == 'k') {
+            } else if constexpr(Index == 'k') {
                 std::array<size_t, 2> shk{ {size(0), size(1)} };
                 Matrix2D<T> tmp(shk);
                 tmp = proto::value(*this)[indices[range(0, size(0))][range(0, size(1))][N]];
                 return tmp;
             }
         }
-        std::vector<T> transversal_vector(char index, int N)  {
-            BOOST_ASSERT_MSG((index == 'i') || (index == 'j') || (index == 'k') , "Не совпадение индексов");
-            typename array_type::index_gen indices;
+        template<char Index>
+        std::vector<T> transversal_vector(size_t indx)  {
+            static_assert((Index == 'i') || (Index == 'j') || (Index == 'k') , "Не совпадение индексов");
             std::vector<T> transversal_vector;
             transversal_vector.reserve(size(0)*size(1)*size(2));
-            struct index2D { int J; int K; };
-            auto predicate([s_ = std::max({size(0), size(1), size(2)})](int IndexN, std::vector<index2D>& indexJK) ->bool {
-                int j{};
-                do {
-                    j = IndexN == 0 ? IndexN : IndexN-1;
-                    if(j >= 0 && j < indexJK.size() - 1)
-                        while ((indexJK[j].J >= indexJK[j + 1].J) && (indexJK[j].K >= indexJK[j + 1].K)) j--;
-                    else j++;
-                } while (j > (int)s_ - 1);
-                //std::cout << "INDEX J: " << j << std::endl;
-                if (j < 0) return false;
-                else return true;
-            });
-            if (index == 'i') {
-                std::vector<index2D> tmp;
-                tmp.reserve(size(0)*size(1)*size(2));
+            std::function<size_t(size_t, size_t)> permutation_rec;
+            permutation_rec = [&permutation_rec](size_t N, size_t K) {
+                size_t tmp = 0;
+                if( N <= 0 || K <= 0) {
+                    tmp = 0;
+                } else {
+                    tmp = (N - 1)*permutation_rec(N - 1, K) + permutation_rec(N - 1, K - 1);
+                }
+                return tmp;
+            };
+
+            if constexpr(Index == 'i') {
                 for (size_t j = 0; j != size(1); ++j) {
                     for (size_t k = 0; k != size(2); ++k) {
-                        tmp.push_back({int(j), int(k)});
-                        if(predicate(int(N), tmp)){
-                            transversal_vector.push_back(transversal_matrix('i', N)(j, k));
+                        if(permutation_rec(size(0), indx)%2 == 0){
+                            transversal_vector.push_back(transversal_matrix<'i'>(indx)(j, k));
                         }
                     }
                 }
-            } else if (index == 'j') {
-                std::vector<index2D> tmp;
-                tmp.reserve(size(0)*size(1)*size(2));
+            } else if constexpr(Index == 'j') {
                 for (size_t i = 0; i != size(0); ++i) {
                     for (size_t k = 0; k != size(2); ++k) {
-                        tmp.push_back({int(i), int(k)});
-                        if(predicate(int(N), tmp)){
-                            transversal_vector.push_back(transversal_matrix('j', N)(i, k));
+                        if(permutation_rec(size(1), indx)%2 == 0){
+                            transversal_vector.push_back(transversal_matrix<'j'>(indx)(i, k));
                         }
                     }
                 }
-            } else if (index == 'k') {
-                std::vector<index2D> tmp;
-                tmp.reserve(size(0)*size(1)*size(2));
+            } else if constexpr(Index == 'k') {
                 for (size_t i = 0; i != size(0); ++i) {
                     for (size_t j = 0; j != size(1); ++j) {
-                        tmp.push_back({int(i), int(j)});
-                        if(predicate(int(N), tmp)){
-                            transversal_vector.push_back(transversal_matrix('k', N)(i, j));
+                        if(permutation_rec(size(2), indx)%2 == 0){
+                            transversal_vector.push_back(transversal_matrix<'k'>(indx)(i, j));
                         }
                     }
                 }
             }
             return transversal_vector;
         }
-        T DET_orient(char index, int N) {
-            BOOST_ASSERT_MSG((index == 'i') || (index == 'j') || (index == 'k') , "Не совпадение индексов");
-            if(index == 'i') {
+        template<char Index>
+        T DET_orient(size_t indx) {
+            static_assert((Index == 'i') || (Index == 'j') || (Index == 'k') , "Не совпадение индексов");
+            if constexpr(Index == 'i') {
                 return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), T(1),
                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
                             for (size_t i = r.begin(); i != r.end(); ++i) {
-                                tmp *= transversal_vector('i', N)[i];
+                                tmp *= transversal_vector<'i'>(indx)[i];
                             } return tmp; }, std::multiplies<T>());
-            } else if(index == 'j') {
+            } else if constexpr(Index == 'j') {
                 return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), T(1),
                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
                             for (size_t i = r.begin(); i != r.end(); ++i) {
-                                tmp *= transversal_vector('j', N)[i];
+                                tmp *= transversal_vector<'j'>(indx)[i];
                             } return tmp; }, std::multiplies<T>());
-            } else if(index == 'k') {
+            } else if constexpr(Index == 'k') {
                 return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), T(1),
                         [=](const tbb::blocked_range<size_t>& r, T tmp) {
                             for (size_t i = r.begin(); i != r.end(); ++i) {
-                                tmp *= transversal_vector('k', N)[i];
+                                tmp *= transversal_vector<'k'>(indx)[i];
                             } return tmp; }, std::multiplies<T>());
             }
         }
@@ -541,7 +671,8 @@ namespace _spatial {
                     for (size_t i = out_i.begin(); i < out_i.end(); ++i)
                         for (size_t j = out_j.begin(); j < out_j.end(); ++j)
                             for (size_t k = out_k.begin(); k < out_k.end(); ++k)
-                                tmp += std::pow(-1, _my::invers<3>(i, j, k))*DET_orient('i', i)*DET_orient('j', j)*DET_orient('k', k);
+                                tmp += std::pow(-1, _my::invers_loop<3>({i, j, k})[i] + _my::invers_loop<3>({i, j, k})[j] + _my::invers_loop<3>({i, j, k})[k])
+                                        *DET_orient<'i'>(i)*DET_orient<'j'>(j)*DET_orient<'k'>(k);
                     return tmp; }, std::plus<T>() );
         }
         template< typename Expr >

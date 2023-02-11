@@ -2,6 +2,7 @@
 #define TBB_PREVIEW_BLOCKED_RANGE_ND 1
 
 #include <type_traits>
+#include <functional>
 
 #include <boost/multi_array.hpp>
 #include <boost/mpl/int.hpp>
@@ -12,6 +13,7 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/core/demangle.hpp>
 #include <boost/core/typeinfo.hpp>
+#include <boost/static_assert.hpp>
 
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_rangeNd.h>
@@ -181,6 +183,51 @@ template<typename T>
 using type_end = typename mpl::if_c<std::is_same_v<T, size_t>, size_t, big::int128_t>::type;
 template<typename T>
 using type_two = typename mpl::if_c<std::is_same_v<T, int>, int, type_end<T> >::type;
+namespace _my {
+template <int N, int I, class Closure>
+typename std::enable_if_t<(I == N)> is_meta_loop(Closure& closure) {}
+
+template <int N, int I, class Closure>
+typename std::enable_if_t<(I < N)> is_meta_loop(Closure& closure) {
+    closure.template apply<I>();
+    is_meta_loop<N, I + 1>(closure);
+}
+template <int N, class Closure>
+inline void meta_loop(Closure& closure) {
+    is_meta_loop<N, 0>(closure);
+}
+}
+
+template<size_t I, size_t N>
+struct for_invers_J {
+private:
+    const std::array<int, N>& P;
+    std::array<int, N>& T;
+public:
+    for_invers_J(const std::array<int, N>& P, std::array<int, N>& T) :P(P), T(T)  {}
+    template <int J>
+    void apply() {
+        if (P[J] > P[I]) {
+            T[P[I]] = T[P[I]]++;
+        }
+    }
+};
+template<size_t N>
+struct for_invers_I {
+private:
+    const std::array<int, N>& P;
+    std::array<int, N>& T;
+public:
+    for_invers_I(const std::array<int, N>& P, std::array<int, N>& T) :P(P), T(T)  {}
+    template <int I>
+    void apply() {
+        for_invers_J<I, N> closure(P, T);
+        if constexpr(I == 0)
+            _my::meta_loop<0>(closure);
+        else
+            _my::meta_loop<I - 1>(closure);
+    }
+};
 
 ///ABS
 namespace _my {
@@ -212,32 +259,13 @@ struct print_type
         std::cout << boost::core::demangled_name(ti) << std::endl;
     }
 };
-template<size_t DimN>
-size_t invers(int I, int J, int K) {
-    std::array<int, DimN> a{I, J, K};
-    size_t count{};
-    for(size_t i = 1; i < DimN - 1; ++i) {
-        if(((a[i] > a[i+1]) && (a[i]>a[i-1])) || ((a[i] < a[i+1]) && (a[i] < a[i-1]))) {
-            count++;
-        }
-    }
-    if ((a[0] > a[1]) || (a[0] < a[1])) {
-        count++;
-    }
-    return count;
+template<size_t N>
+inline std::array<int, N> invers_loop(const std::array<int, N>& P) {
+    std::array<int, N> T;
+    for_invers_I<N> closure(P, T);
+    meta_loop<N>(closure);
+    return T;
 }
-template<size_t DimN>
-size_t invers(int I, int J, int K, int L) {
-    std::array<int, DimN> a{I, J, K, L};
-    size_t count{};
-    for(size_t i = 1; i < DimN - 1; ++i) {
-        if(((a[i] > a[i+1]) && (a[i]>a[i-1])) || ((a[i] < a[i+1]) && (a[i] < a[i-1]))) {
-            count++;
-        }
-    }
-    if ((a[0] > a[1]) || (a[0] < a[1])) {
-        count++;
-    }
-    return count;
-}
+
+
 }

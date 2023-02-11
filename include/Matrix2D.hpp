@@ -10,7 +10,7 @@ namespace _spatial {
 
     struct Matrix2DGrammar : proto::or_<
         proto::terminal<matrix2_<proto::_>>,
-        proto::plus<Matrix2DGrammar, Matrix2DGrammar>,
+//        proto::plus<Matrix2DGrammar, Matrix2DGrammar>,
         proto::minus<Matrix2DGrammar, Matrix2DGrammar>,
         proto::negate< Matrix2DGrammar>,
         proto::less_equal< Matrix2DGrammar, Matrix2DGrammar>,
@@ -172,6 +172,13 @@ namespace _spatial {
                             proto::value(*this)(i, j) += expr(i, j);
                 });
             return *this;
+        }
+        template< typename Expr >
+        friend Matrix2D<T> operator + (Matrix2D<T> lhs, Expr const& expr) {
+            SizeMatrix2D_context const sizes(lhs.size(0), lhs.size(1));
+            proto::eval(proto::as_expr<Matrix2D_domain>(expr), sizes);
+            lhs += expr;
+            return lhs;
         }
         template< typename Expr >
         Matrix2D<T> operator * (Expr const& matr1) {

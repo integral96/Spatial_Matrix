@@ -90,10 +90,10 @@ namespace _spatial {
             Matrix1D_expr<expr_type>(expr_type::make(matrix1_<T>(shape))), shape_(shape) {
 
         }
-        virtual size_t size() const {
+        size_t size() const {
             return proto::value(*this).shape()[0];
         }
-        virtual void Random(T min, T max) {
+        void Random(T min, T max) {
             std::time_t now = std::time(0);
             boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
                 if constexpr(std::is_integral_v<T> || IsBigInt<T>::value) {
