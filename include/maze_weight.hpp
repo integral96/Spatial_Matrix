@@ -90,7 +90,7 @@ private:
                 for(size_t i = 0; i < this->size(0); ++i)
                     for(size_t j = 0; j < this->size(1); ++j)
                         for(size_t k = 0; k < this->size(2); ++k)
-                            proto::value(*this)(i, j, k) = std::complex<int >(6, 6);
+                            proto::value(*this)(i, j, k) = std::complex<int >(6, 12);
                 for(auto& pass : passages) {
                     std::tie(i_from, j_from, k_from, i_to, j_to, k_to) = pass;
                     std::complex<uint8_t > cell_num_from = proto::value(*this)(i_from, j_from, k_from);
@@ -141,7 +141,7 @@ private:
                     for(size_t j = 0; j < this->size(1); ++j)
                         for(size_t k = 0; k < this->size(2); ++k)
                             for(size_t l = 0; l < this->size(3); ++l)
-                                proto::value(*this)(i, j, k, l) = std::complex<int >(6, 6);
+                                proto::value(*this)(i, j, k, l) = std::complex<int >(6, 12);
                 for(auto& pass : passages) {
                     std::tie(i_from, j_from, k_from, l_from, i_to, j_to, k_to, l_to) = pass;
                     std::complex<uint8_t > cell_num_from = proto::value(*this)(i_from, j_from, k_from, l_from);
