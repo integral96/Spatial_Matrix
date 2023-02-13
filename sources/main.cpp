@@ -57,80 +57,81 @@ int main()
     A4.Random(0.1, 1.2);
     AC4.Random(1.1, 2.2);
     try {
-        maze_weight<int, _spatial::Matrix3D> maze_3D(shape3D);
-        maze_3D.calc_maze(.5, .5);
-        std::cout << maze_3D.get_maze() << std::endl;
+        maze_weight<std::complex<int>, _spatial::Matrix3D> maze_3D(shape3D);
+        maze_weight<std::complex<int>, _spatial::Matrix4D> maze_4D(shape4D);
+        maze_4D.calc_maze(.5, .5);
+        std::cout << maze_4D.get_maze() << std::endl;
 
 
-        {
-            boost::timer::cpu_timer tmr;
-            std::cout << "START TEST MATRIX_2D ..." << std::endl;
-
-            std::cout << "DETERMINAT 2D = " << A2.DET() << std::endl;
-            std::cout << "DETERMINAT 2D complex = " << AC2.DET() << std::endl;
-            std::cout << "END TEST MATRIX_2D " << tmr.format() << std::endl;
-        }
-        {
-            boost::timer::cpu_timer tmr;
-            std::cout << "START TEST MATRIX_3D. Dim:" << NI << "x" << NJ << "x" << NK << " ..." << std::endl;
-
-            std::cout << "RULE DISTRIBUTED 3D + 2D (complex, index j) = " << std::endl;
-            auto tmp2D = AC3.template product<'j'>(AC2) + AC3_.template product<'j'>(AC2);
-            auto tmp2D_ = (AC3 + AC3_).template product<'j'>(AC2);
-            std::cout << "RETURNT 3D (complex) = " << std::endl;
-            std::cout << std::boolalpha << (tmp2D == tmp2D_)  << std::endl;
-            std::cout << "RULE DISTRIBUTED 3D + 3D (complex, index j) = " << std::endl;
-            auto tmp3D = AC3.template product<'j'>(AC3__) + AC3_.template product<'j'>(AC3__);
-            auto tmp3D_ = (AC3 + AC3_).template product<'j'>(AC3__);
-            std::cout << "RETURNT 4D (complex) = " << std::endl;
-            std::cout << std::boolalpha << (tmp3D  == tmp3D_) << std::endl;
-            for(size_t i = 0; i < tmp2D_.size(0); ++i) {
-                std::cout << "MATRIX_3D cross-sections of orientation i = \n" << tmp2D_.transversal_matrix<'i'>(i) << std::endl;
-            }
-            for(size_t i = 0; i < tmp2D_.size(0) ; ++i) {
-                std::cout << "Determinant of matrix 3D orientation i = " << i << "; " << tmp2D_.DET_orient<'i'>(i) << std::endl;
-            }
-            std::cout << "======================================" << std::endl;
-            for(size_t j = 0; j < tmp2D_.size(1); ++j) {
-                std::cout << "Determinant of matrix 3D orientation j = " << j << "; " << tmp2D_.DET_orient<'j'>(j) << std::endl;
-            }
-            std::cout << "======================================" << std::endl;
-            for(size_t k = 0; k < tmp2D_.size(2); ++k) {
-                std::cout << "Determinant of matrix 3D orientation k = " << k << "; " << tmp2D_.DET_orient<'k'>(k) << std::endl;
-            }
-            std::cout << "======================================" << std::endl;
-            std::cout << "The complete determinant of the matrix 3D = " << tmp2D_.DET_FULL() << std::endl;
-            std::cout << "END TEST MATRIX_3D, ITERATION = " << ", " << tmr.format() << std::endl;
-
-        }
-        {
-            boost::timer::cpu_timer tmr;
-            std::cout << "START TEST MATRIX_4D. Dim:" << NI << "x" << NJ << "x" << NK << "x" << NL << " ..." << std::endl;
-            std::cout << "PRODUCT 4D * 3D (complex, index l) = " << std::endl;
-            auto tmp3D_ = AC4.template product<'l'>(AC3);
-            std::cout << tmp3D_ << std::endl;
-            for(size_t i = 0; i < tmp3D_.size(0); ++i) {
-                std::cout << "MATRIX_4D cross-sections of orientation i = \n" << tmp3D_.transversal_matrix<'i'>(i);
-            }
-            for(size_t i = 0; i < tmp3D_.size(0); ++i) {
-                std::cout << "Determinant of matrix 4D orientation i = " << i << "; " << tmp3D_.DET_orient<'i'>(i) << std::endl;
-            }
-            std::cout << "======================================" << std::endl;
-            for(size_t j = 0; j < tmp3D_.size(1); ++j) {
-                std::cout << "Determinant of matrix 4D orientation j = " << j << "; " << tmp3D_.DET_orient<'j'>(j) << std::endl;
-            }
-            std::cout << "======================================" << std::endl;
-            for(size_t k = 0; k < tmp3D_.size(2); ++k) {
-                std::cout << "Determinant of matrix 4D orientation k = " << k << "; " << tmp3D_.DET_orient<'k'>(k) << std::endl;
-            }
-            std::cout << "======================================" << std::endl;
-            for(size_t l = 0; l < tmp3D_.size(3); ++l) {
-                std::cout << "Determinant of matrix 4D orientation l = " << l << "; " << tmp3D_.DET_orient<'l'>(l) << std::endl;
-            }
-            std::cout << "======================================" << std::endl;
-//            std::cout << "The complete determinant of the matrix 4D = " << A4.DET_FULL() << std::endl;
-            std::cout << "END TEST MATRIX_4D, ITERATION = " << ", " << tmr.format() << std::endl;
-        }
+//        {
+//            boost::timer::cpu_timer tmr;
+//            std::cout << "START TEST MATRIX_2D ..." << std::endl;
+//
+//            std::cout << "DETERMINAT 2D = " << A2.DET() << std::endl;
+//            std::cout << "DETERMINAT 2D complex = " << AC2.DET() << std::endl;
+//            std::cout << "END TEST MATRIX_2D " << tmr.format() << std::endl;
+//        }
+//        {
+//            boost::timer::cpu_timer tmr;
+//            std::cout << "START TEST MATRIX_3D. Dim:" << NI << "x" << NJ << "x" << NK << " ..." << std::endl;
+//
+//            std::cout << "RULE DISTRIBUTED 3D + 2D (complex, index j) = " << std::endl;
+//            auto tmp2D = AC3.template product<'j'>(AC2) + AC3_.template product<'j'>(AC2);
+//            auto tmp2D_ = (AC3 + AC3_).template product<'j'>(AC2);
+//            std::cout << "RETURNT 3D (complex) = " << std::endl;
+//            std::cout << std::boolalpha << (tmp2D == tmp2D_)  << std::endl;
+//            std::cout << "RULE DISTRIBUTED 3D + 3D (complex, index j) = " << std::endl;
+//            auto tmp3D = AC3.template product<'j'>(AC3__) + AC3_.template product<'j'>(AC3__);
+//            auto tmp3D_ = (AC3 + AC3_).template product<'j'>(AC3__);
+//            std::cout << "RETURNT 4D (complex) = " << std::endl;
+//            std::cout << std::boolalpha << (tmp3D  == tmp3D_) << std::endl;
+//            for(size_t i = 0; i < tmp2D_.size(0); ++i) {
+//                std::cout << "MATRIX_3D cross-sections of orientation i = \n" << tmp2D_.transversal_matrix<'i'>(i) << std::endl;
+//            }
+//            for(size_t i = 0; i < tmp2D_.size(0) ; ++i) {
+//                std::cout << "Determinant of matrix 3D orientation i = " << i << "; " << tmp2D_.DET_orient<'i'>(i) << std::endl;
+//            }
+//            std::cout << "======================================" << std::endl;
+//            for(size_t j = 0; j < tmp2D_.size(1); ++j) {
+//                std::cout << "Determinant of matrix 3D orientation j = " << j << "; " << tmp2D_.DET_orient<'j'>(j) << std::endl;
+//            }
+//            std::cout << "======================================" << std::endl;
+//            for(size_t k = 0; k < tmp2D_.size(2); ++k) {
+//                std::cout << "Determinant of matrix 3D orientation k = " << k << "; " << tmp2D_.DET_orient<'k'>(k) << std::endl;
+//            }
+//            std::cout << "======================================" << std::endl;
+//            std::cout << "The complete determinant of the matrix 3D = " << tmp2D_.DET_FULL() << std::endl;
+//            std::cout << "END TEST MATRIX_3D, ITERATION = " << ", " << tmr.format() << std::endl;
+//
+//        }
+//        {
+//            boost::timer::cpu_timer tmr;
+//            std::cout << "START TEST MATRIX_4D. Dim:" << NI << "x" << NJ << "x" << NK << "x" << NL << " ..." << std::endl;
+//            std::cout << "PRODUCT 4D * 3D (complex, index l) = " << std::endl;
+//            auto tmp3D_ = AC4.template product<'l'>(AC3);
+//            std::cout << tmp3D_ << std::endl;
+//            for(size_t i = 0; i < tmp3D_.size(0); ++i) {
+//                std::cout << "MATRIX_4D cross-sections of orientation i = \n" << tmp3D_.transversal_matrix<'i'>(i);
+//            }
+//            for(size_t i = 0; i < tmp3D_.size(0); ++i) {
+//                std::cout << "Determinant of matrix 4D orientation i = " << i << "; " << tmp3D_.DET_orient<'i'>(i) << std::endl;
+//            }
+//            std::cout << "======================================" << std::endl;
+//            for(size_t j = 0; j < tmp3D_.size(1); ++j) {
+//                std::cout << "Determinant of matrix 4D orientation j = " << j << "; " << tmp3D_.DET_orient<'j'>(j) << std::endl;
+//            }
+//            std::cout << "======================================" << std::endl;
+//            for(size_t k = 0; k < tmp3D_.size(2); ++k) {
+//                std::cout << "Determinant of matrix 4D orientation k = " << k << "; " << tmp3D_.DET_orient<'k'>(k) << std::endl;
+//            }
+//            std::cout << "======================================" << std::endl;
+//            for(size_t l = 0; l < tmp3D_.size(3); ++l) {
+//                std::cout << "Determinant of matrix 4D orientation l = " << l << "; " << tmp3D_.DET_orient<'l'>(l) << std::endl;
+//            }
+//            std::cout << "======================================" << std::endl;
+////            std::cout << "The complete determinant of the matrix 4D = " << A4.DET_FULL() << std::endl;
+//            std::cout << "END TEST MATRIX_4D, ITERATION = " << ", " << tmr.format() << std::endl;
+//        }
 
     }
     catch (boost::system::system_error& ec) {
