@@ -7,9 +7,7 @@
 #include <boost/timer/timer.hpp>
 #include <boost/system/system_error.hpp>
 
-
-#include "../include/generate.hpp"
-
+#include "include/Matrix4D.hpp"
 
 static constexpr int NI = 9;
 static constexpr int NJ = 9;
@@ -30,29 +28,28 @@ static constexpr std::array<size_t, 3> shape3D_big = { {NI1, NJ1, NK1} };
 
 int main()
 {
+    using namespace _spatial;
     using namespace std::complex_literals;
     std::cout << std::fixed << std::setprecision(1);
-    MATRIX<2, double> A2(shape2D);
-    MATRIX<2, double> A2_big(shape2D_big);
-    MATRIX<2, std::complex<double>> AC2(shape2D);
+    Matrix2D<double> A2(shape2D);
+    Matrix2D<double> A2_big(shape2D_big);
+    Matrix2D<std::complex<double>> AC2(shape2D);
     A2.Random(1.1, 2.2);
     AC2.Random(0.01, 0.72);
-    MATRIX<3, int> A_maze(shape3D);
-    MATRIX<3, double> A3(shape3D);
-    MATRIX<3, double> A3_(shape3D);
-    MATRIX<3, int> A3_big(shape3D_big);
-    MATRIX<3, std::complex<double>> AC3(shape3D);
-    MATRIX<3, std::complex<double>> AC3_(shape3D);
-    MATRIX<3, std::complex<double>> AC3__(shape3D);
+    Matrix3D<int> A_maze(shape3D);
+    Matrix3D<double> A3(shape3D);
+    Matrix3D<double> A3_(shape3D);
+    Matrix3D<int> A3_big(shape3D_big);
+    Matrix3D<std::complex<double>> AC3(shape3D);
+    Matrix3D<std::complex<double>> AC3_(shape3D);
+    Matrix3D<std::complex<double>> AC3__(shape3D);
     std::cout << "CTOR MATRIX_3D ..." << std::endl;
-//    A3.Random(1.1, 2.2);
-//    A3_.Random(1.1, 2.2);
     AC3.Random(0.1, 0.5);
     AC3_.Random(0.2, 0.8);
     AC3__.Random(0.1, 0.6);
     A2_big.Random(1.2, 2.2);
-    MATRIX<4, double> A4(shape4D);
-    MATRIX<4, std::complex<double>> AC4(shape4D);
+    Matrix4D<double> A4(shape4D);
+    Matrix4D<std::complex<double>> AC4(shape4D);
     std::cout << "CTOR MATRIX_3D BIG ..." << std::endl;
     A4.Random(0.1, 1.2);
     AC4.Random(1.1, 2.2);
