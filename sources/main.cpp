@@ -4,21 +4,32 @@
 #include <chrono>
 #include <thread>
 
+#define BOOST_TEST_MODULE test_module_name
+
 #include <boost/timer/timer.hpp>
 #include <boost/system/system_error.hpp>
+//#include <boost/test/included/unit_test.hpp>
 
 #include "include/Matrix4D.hpp"
+#include "include/graph_weight.hpp"
 
 static constexpr int NI = 9;
 static constexpr int NJ = 9;
 static constexpr int NK = 9;
 static constexpr int NL = 9;
 
+static constexpr int NI_b = 18;
+static constexpr int NJ_b = 18;
+static constexpr int NK_b = 18;
+
 
 static constexpr std::array<size_t, 2> shape2D = { {NI, NJ} };
 static constexpr std::array<size_t, 3> shape3D = { {NI, NJ, NK} };
+static constexpr std::array<size_t, 3> shape3D_b = { {NI_b, NJ_b, NK_b} };
 static constexpr std::array<size_t, 4> shape4D = { {NI, NJ, NK, NL} };
 
+
+using C_T = int;
 
 int main()
 {
@@ -26,10 +37,17 @@ int main()
     using namespace std::complex_literals;
     std::cout << std::fixed << std::setprecision(1);
 
+
     try {
-        maze_weight<std::complex<int>, Matrix4D> maze_4D(shape4D);
-        maze_4D.calc_maze(.5, .5);
-        std::cout << maze_4D.get_maze() << std::endl;
+        maze_weight<C_T, Matrix3D> maze_3D(shape3D_b);
+        maze_3D.calc_maze(.5, .5);
+        auto& maze3D = maze_3D.get_maze();
+
+        _graph::local_baricentric_star<C_T> aa(maze3D, 5, 12, 3);
+
+        std::cout << maze3D << std::endl;
+        aa.find_print(5, 12, 3);
+        std::cout << aa << std::endl;
 
         Matrix2D<double> A2(shape2D);
         Matrix2D<std::complex<double>> AC2(shape2D);
