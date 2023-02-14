@@ -94,14 +94,14 @@ public:
         boost::add_edge(source, gorizont_front_left, graph);
         boost::add_edge(source, gorizont_back_left, graph);
 
-        std::array<int, 9> distance{{0}};
+//        std::array<int, 9> distance{{0}};
 
-        boost::breadth_first_search(graph, gorizont_back_left,
-                                    boost::visitor(
-                                        boost::make_bfs_visitor(
-                                            boost::record_distances(distance.begin(), boost::on_tree_edge{}))));
+//        boost::breadth_first_search(graph, gorizont_back_left,
+//                                    boost::visitor(
+//                                        boost::make_bfs_visitor(
+//                                            boost::record_distances(distance.begin(), boost::on_tree_edge{}))));
 
-        std::copy(distance.begin(), distance.end(), std::ostream_iterator<int>(std::cout, "\n"));
+//        std::copy(distance.begin(), distance.end(), std::ostream_iterator<int>(std::cout, "\n"));
     }
     void find_print(size_t X, size_t Y, size_t Z) const {
         vertex_it_t it, end;

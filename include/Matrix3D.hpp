@@ -519,6 +519,12 @@ namespace _spatial {
             }
         }
         T DET_FULL() {
+            const auto predic_([&](size_t i, size_t j, size_t k) ->T {
+                const int pow_w = _my::invers_loop<3>({{int(i), int(j), int(k)}})[0]
+                                    + _my::invers_loop<3>({{int(i), int(j), int(k)}})[1]
+                                    + _my::invers_loop<3>({{int(i), int(j), int(k)}})[2];
+                return std::pow(-1, pow_w)*DET_orient<'i'>(i)*DET_orient<'j'>(j)*DET_orient<'k'>(k);
+            });
             return tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }), T(0),
                     [=](const range_tbb& out, T tmp) {
                     const auto& out_i = out.dim(0);
@@ -527,8 +533,7 @@ namespace _spatial {
                     for (size_t i = out_i.begin(); i < out_i.end(); ++i)
                         for (size_t j = out_j.begin(); j < out_j.end(); ++j)
                             for (size_t k = out_k.begin(); k < out_k.end(); ++k)
-                                tmp += std::pow(-1, _my::invers_loop<3>({i, j, k})[i] + _my::invers_loop<3>({i, j, k})[j] + _my::invers_loop<3>({i, j, k})[k])
-                                        *DET_orient<'i'>(i)*DET_orient<'j'>(j)*DET_orient<'k'>(k);
+                                tmp += predic_(i, j, k);
                     return tmp; }, std::plus<T>() );
         }
         template< typename Expr >

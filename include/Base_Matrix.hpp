@@ -14,6 +14,8 @@
 #include <boost/core/demangle.hpp>
 #include <boost/core/typeinfo.hpp>
 #include <boost/static_assert.hpp>
+#include <boost/array.hpp>
+#include <boost/unordered/unordered_map.hpp>
 
 #include <tbb/parallel_for.h>
 #include <tbb/blocked_rangeNd.h>
@@ -198,34 +200,35 @@ inline void meta_loop(Closure& closure) {
 }
 }
 
-template<size_t I, size_t N>
+template<int I, int N>
 struct for_invers_J {
 private:
-    const std::array<int, N>& P;
-    std::array<int, N>& T;
+    const boost::array<int, N>& P;
+    boost::array<int, N>& T;
 public:
-    for_invers_J(const std::array<int, N>& P, std::array<int, N>& T) :P(P), T(T)  {}
+    for_invers_J(const boost::array<int, N>& P_, boost::array<int, N>& T_) :P(P_), T(T_)  {}
     template <int J>
     void apply() {
         if (P[J] > P[I]) {
-            T[P[I]] = T[P[I]]++;
+            T[I] = P[I];
+            T[I] = T[I]++;
         }
     }
 };
-template<size_t N>
+template<int N>
 struct for_invers_I {
 private:
-    const std::array<int, N>& P;
-    std::array<int, N>& T;
+    const boost::array<int, N>& P;
+    boost::array<int, N>& T;
 public:
-    for_invers_I(const std::array<int, N>& P, std::array<int, N>& T) :P(P), T(T)  {}
+    for_invers_I(const boost::array<int, N>& P_, boost::array<int, N>& T_) :P(P_), T(T_)  {}
     template <int I>
     void apply() {
         for_invers_J<I, N> closure(P, T);
         if constexpr(I == 0)
             _my::meta_loop<0>(closure);
         else
-            _my::meta_loop<I - 1>(closure);
+            _my::meta_loop<I>(closure);
     }
 };
 
@@ -259,13 +262,14 @@ struct print_type
         std::cout << boost::core::demangled_name(ti) << std::endl;
     }
 };
-template<size_t N>
-inline std::array<int, N> invers_loop(const std::array<int, N>& P) {
-    std::array<int, N> T;
+template<int N>
+inline boost::array<int, N> invers_loop(const boost::array<int, N>& P) {
+    boost::array<int, N> T;
     for_invers_I<N> closure(P, T);
     meta_loop<N>(closure);
     return T;
 }
+
 
 
 }

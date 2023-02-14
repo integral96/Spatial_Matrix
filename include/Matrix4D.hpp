@@ -543,7 +543,7 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                     for (size_t j = out_j.begin(); j < out_j.end(); ++j)
                         for (size_t k = out_k.begin(); k < out_k.end(); ++k)
                             for (size_t l = out_l.begin(); l < out_l.end(); ++l)
-                                tmp += std::pow(-1, _my::invers_loop<4>({i, j, k, l})[i] + _my::invers_loop<4>({i, j, k, l})[j] + _my::invers_loop<4>({i, j, k, l})[k] + _my::invers_loop<4>({i, j, k, l})[l])
+                                tmp += std::pow(-1, _my::invers_loop<4>({i, j, k, l})[0] + _my::invers_loop<4>({i, j, k, l})[1] + _my::invers_loop<4>({i, j, k, l})[2] + _my::invers_loop<4>({i, j, k, l})[3])
                                         *DET_orient<'i'>(i)*DET_orient<'j'>(j)*DET_orient<'k'>(k)*DET_orient<'l'>(l);
                 return tmp; }, std::plus<T>() );
     }

@@ -9,7 +9,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 
 
-find_package(Boost ${Boost_VERSION_MAJOR} REQUIRED timer regex unit_test_framework  )
+find_package(Boost ${Boost_VERSION_MAJOR} REQUIRED timer#[[ regex unit_test_framework]]  )
 
 
 find_package(TBB REQUIRED tbb)
@@ -21,7 +21,7 @@ file(GLOB SOURCES
     include/*.hpp
     sources/main.cpp)
 
-set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ltbb -fopenmp -std=c++17 -pedantic -pthread -Wall -Wextra")
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ltbb -fopenmp -std=c++17 -pedantic -pthread -Wall")
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=2900")
 
 
