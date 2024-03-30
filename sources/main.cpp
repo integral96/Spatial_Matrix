@@ -1,17 +1,14 @@
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <thread>
 
-#define BOOST_TEST_MODULE test_module_name
-
 #include <boost/timer/timer.hpp>
 #include <boost/system/system_error.hpp>
-//#include <boost/test/included/unit_test.hpp>
 
 #include "include/Matrix4D.hpp"
-#include "include/graph_weight.hpp"
 
 static constexpr int NI = 9;
 static constexpr int NJ = 9;
@@ -37,17 +34,13 @@ int main()
     using namespace std::complex_literals;
     std::cout << std::fixed << std::setprecision(1);
 
-
+    const auto int_perm = _my::permutation_inv<0>(1, 2, 3, 4);
+    std::cout << int_perm << std::endl;
+    const auto chr_perm = _my::permutation_inv<0>('a', 'b', 'c', 'd', 'e');
+    std::cout << chr_perm << std::endl;
     try {
-        maze_weight<C_T, Matrix3D> maze_3D(shape3D_b);
-        maze_3D.calc_maze(.5, .5);
-        auto& maze3D = maze_3D.get_maze();
 
-        _graph::local_baricentric_star<C_T> aa(maze3D, 5, 12, 3);
 
-        std::cout << maze3D << std::endl;
-        aa.find_print(5, 12, 3);
-        std::cout << aa << std::endl;
 
         Matrix2D<double> A2(shape2D);
         Matrix2D<std::complex<double>> AC2(shape2D);

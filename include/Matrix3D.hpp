@@ -3,8 +3,7 @@
 #include <map>
 #include <vector>
 #include <set>
-#include "../include/Matrix2D.hpp"
-#include "include/maze_weight.hpp"
+#include "Matrix2D.hpp"
 
 proto::terminal< std::ostream & >::type cout_ = {std::cout};
 
@@ -132,7 +131,7 @@ namespace _spatial {
         }
 
         void Random(T min, T max, long shift = 0) {
-            std::time_t now = std::time(0);
+            std::time_t now = std::time(nullptr);
             boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
                 if constexpr(std::is_integral_v<T> || IsBigInt<T>::value) {
                     boost::random::uniform_int_distribution<> dist{int(min), int(max)};
@@ -152,7 +151,7 @@ namespace _spatial {
         template<typename F, typename = std::enable_if_t<std::is_same_v<T, std::complex<typename _my::is_type<F>::type>> &&
                                                           std::is_same_v<F, typename _my::is_type<F>::type>>>
         void Random(F min, F max) {
-            std::time_t now = std::time(0);
+            std::time_t now = std::time(nullptr);
             boost::random::mt19937 gen{static_cast<std::uint32_t>(now)};
             boost::random::uniform_real_distribution<> dist{double(min), double(max)};
             for(size_t i = 0; i < size(0); ++i)
@@ -212,7 +211,7 @@ namespace _spatial {
             SizeMatrix3D_context const sizes(size(0), size(1), size(2));
             proto::eval(proto::as_expr<Matrix3D_domain>(expr), sizes);
             size_t tmp_ = tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }), size_t(0),
-                    [=](const range_tbb& out, size_t tmp) {
+                    [=, this](const range_tbb& out, size_t tmp) {
                     const auto& out_i = out.dim(0);
                     const auto& out_j = out.dim(1);
                     const auto& out_k = out.dim(2);
@@ -222,7 +221,7 @@ namespace _spatial {
                                 tmp += proto::value(*this)(i, j, k) != expr(i, j, k) ? 1 : 0;
                     return tmp; }, std::plus<size_t>() );
             size_t tmp2_ = tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }), size_t(0),
-                    [=](const range_tbb& out, size_t tmp) {
+                    [=, this](const range_tbb& out, size_t tmp) {
                     const auto& out_i = out.dim(0);
                     const auto& out_j = out.dim(1);
                     const auto& out_k = out.dim(2);
@@ -500,19 +499,19 @@ namespace _spatial {
             static_assert((Index == 'i') || (Index == 'j') || (Index == 'k') , "Не совпадение индексов");
             if constexpr(Index == 'i') {
                 return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), T(1),
-                        [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                        [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                             for (size_t i = r.begin(); i != r.end(); ++i) {
                                 tmp *= transversal_vector<'i'>(indx)[i];
                             } return tmp; }, std::multiplies<T>());
             } else if constexpr(Index == 'j') {
                 return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), T(1),
-                        [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                        [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                             for (size_t i = r.begin(); i != r.end(); ++i) {
                                 tmp *= transversal_vector<'j'>(indx)[i];
                             } return tmp; }, std::multiplies<T>());
             } else if constexpr(Index == 'k') {
                 return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), T(1),
-                        [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                        [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                             for (size_t i = r.begin(); i != r.end(); ++i) {
                                 tmp *= transversal_vector<'k'>(indx)[i];
                             } return tmp; }, std::multiplies<T>());
@@ -520,9 +519,9 @@ namespace _spatial {
         }
         T DET_FULL() {
             const auto predic_([&](size_t i, size_t j, size_t k) ->T {
-                const int pow_w = _my::invers_loop<3>({{int(i), int(j), int(k)}})[0]
-                                    + _my::invers_loop<3>({{int(i), int(j), int(k)}})[1]
-                                    + _my::invers_loop<3>({{int(i), int(j), int(k)}})[2];
+                const int pow_w = static_cast<int>(_my::permutation_inv<0>(i, j, k)
+                                                 + _my::permutation_inv<1>(i, j, k)
+                                                 + _my::permutation_inv<2>(i, j, k));
                 return std::pow(-1, pow_w)*DET_orient<'i'>(i)*DET_orient<'j'>(j)*DET_orient<'k'>(k);
             });
             return tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }), T(0),

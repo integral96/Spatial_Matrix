@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(Matrix4D ${PROJECT_NAME} LANGUAGES CXX )
+project(spatial_group ${PROJECT_NAME} LANGUAGES CXX )
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 #set(Boost_USE_MULTITHREADED ON)
@@ -21,15 +21,13 @@ file(GLOB SOURCES
     include/*.hpp
     sources/main.cpp)
 
-set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ltbb -fopenmp -std=c++17 -pedantic -pthread -Wall")
+set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ltbb -fopenmp -pedantic -pthread")
 #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=2900")
 
 
-find_package(MPI REQUIRED)
-
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-target_link_libraries (${PROJECT_NAME} ${Boost_LIBRARIES} TBB::tbb MPI::MPI_CXX)
+target_link_libraries (${PROJECT_NAME} ${Boost_LIBRARIES} TBB::tbb)
 
 #set (TESTS_SOURCES sources/unit_test.cpp)
 #set (TEST test_${PROJECT})

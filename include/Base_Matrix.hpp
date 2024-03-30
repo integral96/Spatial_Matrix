@@ -200,38 +200,6 @@ inline void meta_loop(Closure& closure) {
 }
 }
 
-template<int I, int N>
-struct for_invers_J {
-private:
-    const boost::array<int, N>& P;
-    boost::array<int, N>& T;
-public:
-    for_invers_J(const boost::array<int, N>& P_, boost::array<int, N>& T_) :P(P_), T(T_)  {}
-    template <int J>
-    void apply() {
-        if (P[J] > P[I]) {
-            T[I] = P[I];
-            T[I] = T[I]++;
-        }
-    }
-};
-template<int N>
-struct for_invers_I {
-private:
-    const boost::array<int, N>& P;
-    boost::array<int, N>& T;
-public:
-    for_invers_I(const boost::array<int, N>& P_, boost::array<int, N>& T_) :P(P_), T(T_)  {}
-    template <int I>
-    void apply() {
-        for_invers_J<I, N> closure(P, T);
-        if constexpr(I == 0)
-            _my::meta_loop<0>(closure);
-        else
-            _my::meta_loop<I>(closure);
-    }
-};
-
 ///ABS
 namespace _my {
 template<typename T>
@@ -262,14 +230,30 @@ struct print_type
         std::cout << boost::core::demangled_name(ti) << std::endl;
     }
 };
-template<int N>
-inline boost::array<int, N> invers_loop(const boost::array<int, N>& P) {
-    boost::array<int, N> T;
-    for_invers_I<N> closure(P, T);
-    meta_loop<N>(closure);
-    return T;
-}
 
+auto print = [](auto const& v, char term = ' ')
+{
+    std::cout << "{ ";
+    for (const auto& e : v)
+        std::cout << e << ' ';
+    std::cout << '}' << term;
+};
+
+template<size_t N, typename ...Args> requires  (N < sizeof... (Args))
+inline auto
+permutation_inv(Args&& ...args) {
+    short col = 0;
+    std::array<std::common_type_t<Args...>, sizeof... (Args)> ss{std::forward<Args>(args)...};
+    do {
+//        print(ss);
+        const auto& tmp = ss[N];
+        col = 0;
+        for (const auto& e : ss) {
+            if(tmp < e) ++col;
+        }
+    } while (std::ranges::next_permutation(ss.begin() + N, ss.end()).found);
+    return col;
+}
 
 
 }

@@ -356,13 +356,13 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                                      } return tmp; }, std::plus<T>());
                     proto::value(matrix)(i, j, k, l) =
                             tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k, l),
-                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                 [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                                      for (size_t z = r.begin(); z != r.end(); ++z) {
                                          tmp += proto::value(*this)(i, j, z, l) * matr1(i, z, k, l);
                                      } return tmp; }, std::plus<T>());
                     proto::value(matrix)(i, j, k, l) =
                             tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), proto::value(matrix)(i, j, k, l),
-                                 [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                                 [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                                      for (size_t z = r.begin(); z != r.end(); ++z) {
                                          tmp += proto::value(*this)(i, j, k, z) * matr1(i, j, z, l);
                                      } return tmp; }, std::plus<T>());
@@ -508,25 +508,25 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
         BOOST_STATIC_ASSERT_MSG((Index == 'i') || (Index == 'j') || (Index == 'k') || (Index == 'l'), "Не совпадение индексов");
         if constexpr(Index == 'i') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(0)), T(1),
-                    [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                    [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
                             tmp *= transversal_vector<'i'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
         } else if constexpr(Index == 'j') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(1)), T(1),
-                    [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                    [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
                             tmp *= transversal_vector<'j'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
         } else if constexpr(Index == 'k') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(2)), T(1),
-                    [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                    [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
                             tmp *= transversal_vector<'k'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
         } else if constexpr(Index == 'l') {
             return tbb::parallel_reduce(tbb::blocked_range<size_t>(0, size(3)), T(1),
-                    [=](const tbb::blocked_range<size_t>& r, T tmp) {
+                    [=, this](const tbb::blocked_range<size_t>& r, T tmp) {
                         for (size_t i = r.begin(); i != r.end(); ++i) {
                             tmp *= transversal_vector<'l'>(indx)[i];
                         } return tmp; }, std::multiplies<T>());
@@ -534,7 +534,7 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
     }
     T DET_FULL() {
         return tbb::parallel_reduce(range_tbb({ 0, size(0) }, { 0, size(1) }, { 0, size(2) }, { 0, size(3) }), T(0),
-                [=](const range_tbb& out, T tmp) {
+                [=, this](const range_tbb& out, T tmp) {
                 const auto& out_i = out.dim(0);
                 const auto& out_j = out.dim(1);
                 const auto& out_k = out.dim(2);
@@ -543,7 +543,10 @@ struct Matrix4D : Matrix4D_expr<typename proto::terminal< matrix4_<T>>::type> {
                     for (size_t j = out_j.begin(); j < out_j.end(); ++j)
                         for (size_t k = out_k.begin(); k < out_k.end(); ++k)
                             for (size_t l = out_l.begin(); l < out_l.end(); ++l)
-                                tmp += std::pow(-1, _my::invers_loop<4>({i, j, k, l})[0] + _my::invers_loop<4>({i, j, k, l})[1] + _my::invers_loop<4>({i, j, k, l})[2] + _my::invers_loop<4>({i, j, k, l})[3])
+                                tmp += std::pow(-1, _my::permutation_inv<0>(i, j, k, l)
+                                                  + _my::permutation_inv<1>(i, j, k, l)
+                                                  + _my::permutation_inv<2>(i, j, k, l)
+                                                  + _my::permutation_inv<3>(i, j, k, l))
                                         *DET_orient<'i'>(i)*DET_orient<'j'>(j)*DET_orient<'k'>(k)*DET_orient<'l'>(l);
                 return tmp; }, std::plus<T>() );
     }
